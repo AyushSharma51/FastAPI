@@ -1,16 +1,11 @@
-import math
 from datetime import date
 from enum import Enum
-from operator import attrgetter
-from typing import List, Optional
+from typing import Annotated, List, Literal, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from pydantic import BaseModel
 
 app = FastAPI(title="Sports Matches API")
-
-
-# -------------------- ENUMS --------------------
 
 
 class Sport(str, Enum):
@@ -34,19 +29,10 @@ class Winner(str, Enum):
     draw = "draw"
 
 
-class SortBy(str, Enum):
-    date = "date"
-    sport = "sport"
-    status = "status"
-    home_team = "home_team"
-
-
-class SortOrder(str, Enum):
-    asc = "asc"
-    desc = "desc"
-
-
-# -------------------- MODELS --------------------
+class TeamFilter(str, Enum):
+    won = "won"
+    lost = "lost"
+    draw = "draw"
 
 
 class Match(BaseModel):
@@ -59,8 +45,6 @@ class Match(BaseModel):
     status: Status
     winner: Optional[Winner] = None
 
-
-# -------------------- DATA --------------------
 
 INITIAL_DATA: List[Match] = [
     Match(id=1, home_team="Arsenal", away_team="Chelsea", sport=Sport.football,
@@ -87,15 +71,6 @@ INITIAL_DATA: List[Match] = [
 ]
 
 
-class TeamFilter(str, Enum):
-    won = "won"
-    lost = "lost"
-    draw = "draw"
-
-
-# -------------------- ROUTES --------------------
-
-
 @app.get("/health", tags=["System"])
 def health_check():
     return {"status": "ok"}
@@ -103,29 +78,43 @@ def health_check():
 
 @app.get("/matches", tags=["Matches"])
 def list_matches(
-    status: Optional[Status] = None,
-    sport: Optional[Sport] = None,
-    winner: Optional[Winner] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
-    team_name: Optional[str] = None,
-    team_filter: Optional[TeamFilter] = None,
-    page: int = 1,
-    limit: int = 10,
-    sort_by: Optional[SortBy] = None,
-    sort_order: SortOrder = SortOrder.asc,
+    sport: Annotated[
+        Optional[Sport],
+        Query(title="Sport Type", description="Filter matches by sport"),
+    ] = None,
+    status: Annotated[
+        Optional[Status],
+        Query(title="Match Status", description="Filter by match status"),
+    ] = None,
+    winner: Annotated[Optional[Winner], Query()] = None,
+    team_name: Annotated[
+        Optional[str],
+        Query(min_length=3, max_length=50, title="Team Name",
+              description="Filter by team name. Case-insensitive partial match."),
+    ] = None,
+    team_filter: Annotated[Optional[TeamFilter], Query()] = None,
+    from_date: Annotated[
+        Optional[date],
+        Query(alias="from-date", title="Start Date",
+              description="Filter matches on or after this date (YYYY-MM-DD)"),
+    ] = None,
+    to_date: Annotated[
+        Optional[date],
+        Query(alias="to-date", title="End Date",
+              description="Filter matches on or before this date (YYYY-MM-DD)"),
+    ] = None,
+    page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+    limit: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
+    sort_by: Annotated[
+        Optional[Literal["date", "sport", "status", "home_team"]],
+        Query(description="Field to sort by"),
+    ] = None,
+    sort_order: Annotated[Literal["asc", "desc"], Query(description="Sort order")] = "asc",
 ):
-    if team_filter and winner:
-        return {"Error": "These team_filter and winner cannot be selected together."}
-    if (team_filter or winner) and (
-        status is not Status.completed and status is not None
-    ):
-        return {"Error": "team_filter or winner can only be used when status is 'completed'."}
+    if from_date and to_date and from_date > to_date:
+        return {"error": "from-date must be before to-date"}
 
-    if start_date and end_date and start_date > end_date:
-        return {"Error": "start_date must be before or equal to end_date."}
-
-    matches = INITIAL_DATA
+    matches = list(INITIAL_DATA)
 
     if status:
         matches = [m for m in matches if m.status == status]
@@ -133,71 +122,68 @@ def list_matches(
         matches = [m for m in matches if m.sport == sport]
     if winner:
         matches = [m for m in matches if m.winner == winner]
-    if start_date:
-        matches = [m for m in matches if m.date >= start_date]
-    if end_date:
-        matches = [m for m in matches if m.date <= end_date]
+    if from_date:
+        matches = [m for m in matches if m.date >= from_date]
+    if to_date:
+        matches = [m for m in matches if m.date <= to_date]
 
     if team_name:
         team = team_name.lower()
         if team_filter is None:
             matches = [m for m in matches if team in m.home_team.lower() or team in m.away_team.lower()]
-        elif team_filter is TeamFilter.won:
-            matches = [match for match in matches if
-                       (team == match.home_team.lower() and match.winner == Winner.home_team) or
-                       (team == match.away_team.lower() and match.winner == Winner.away_team)]
-        elif team_filter is TeamFilter.lost:
-            matches = [match for match in matches if
-                       (team == match.home_team.lower() and match.winner != Winner.home_team) or
-                       (team == match.away_team.lower() and match.winner != Winner.away_team)]
-        elif team_filter is TeamFilter.draw:
-            matches = [match for match in matches if
-                       (team == match.home_team.lower() or team == match.away_team.lower()) and
-                       match.winner == Winner.draw]
-
-    if not matches:
-        return {"message": "No matches found for the given filters."}
+        elif team_filter == TeamFilter.won:
+            matches = [m for m in matches if
+                       (team == m.home_team.lower() and m.winner == Winner.home_team) or
+                       (team == m.away_team.lower() and m.winner == Winner.away_team)]
+        elif team_filter == TeamFilter.lost:
+            matches = [m for m in matches if
+                       (team == m.home_team.lower() and m.winner == Winner.away_team) or
+                       (team == m.away_team.lower() and m.winner == Winner.home_team)]
+        elif team_filter == TeamFilter.draw:
+            matches = [m for m in matches if
+                       (team in m.home_team.lower() or team in m.away_team.lower()) and
+                       m.winner == Winner.draw]
 
     if sort_by:
-        reverse = sort_order == "desc"
-        matches.sort(key=attrgetter(sort_by), reverse=reverse)
+        matches = sorted(matches, key=lambda m: getattr(m, sort_by),
+                         reverse=(sort_order == "desc"))
 
     total = len(matches)
-    total_pages = math.ceil(total / limit)
+    total_pages = (total + limit - 1) // limit if total > 0 else 0
+
+    if page > total_pages and total > 0:
+        return {"error": f"Page {page} does not exist. Total pages: {total_pages}",
+                "total": total, "total_pages": total_pages}
+
     start = (page - 1) * limit
-    end = start + limit
-    return {
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "total_pages": total_pages,
-        "matches": matches[start:end],
-    }
+    paginated = matches[start:start + limit]
+
+    if not paginated:
+        return {"message": "No matches found.", "total": 0, "page": page,
+                "limit": limit, "total_pages": 0, "results": []}
+
+    return {"total": total, "page": page, "limit": limit,
+            "total_pages": total_pages, "results": paginated}
 
 
 @app.get("/matches/{match_id}", tags=["Matches"])
 def get_match_by_id(match_id: int):
-    matches = INITIAL_DATA
-    matches = [match for match in matches if match.id == match_id]
-    if len(matches) == 0:
-        return {"error": "Match Id not found"}
-    return matches[0]
+    for match in INITIAL_DATA:
+        if match.id == match_id:
+            return match
+    return {"error": "Match not found"}
 
 
 @app.post("/matches", tags=["Matches"])
 def create_match(match: Match):
-    if match.status is Status.upcoming:
-        if match.date < date.today():
-            return {"Error": "Upcoming match date cannot be in the past."}
-    if match.status is not Status.completed:
-        if match.winner is not None:
-            return {"Error": "Status should be Completed to have a winner"}
+    if match.status is Status.upcoming and match.date < date.today():
+        return {"error": "Upcoming match date cannot be in the past."}
+    if match.status is not Status.completed and match.winner is not None:
+        return {"error": "Status should be Completed to have a winner"}
     if match.home_team == match.away_team:
-        return {"Error": "Both teams cannot have the same name."}
-    if match.winner is None:
-        if match.status is Status.completed:
-            return {"Error": " Winner cannot be None if match is completed"}
-    new_id = INITIAL_DATA[-1].id + 1
-    match.id = new_id
+        return {"error": "Both teams cannot have the same name."}
+    if match.winner is None and match.status is Status.completed:
+        return {"error": "Winner cannot be None if match is completed"}
+    match.id = INITIAL_DATA[-1].id + 1
     INITIAL_DATA.append(match)
     return match
