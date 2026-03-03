@@ -1,5 +1,5 @@
 [project]
-name = "fastapi-practice"
+name = "sports-api"
 version = "0.1.0"
 description = ""
 authors = [
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [tool.poetry]
-packages = [{include = "fastapi_practice", from = "src"}]
+package-mode=false
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
