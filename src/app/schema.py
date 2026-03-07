@@ -57,8 +57,8 @@ class Match(BaseModel):
     sport: Sport
     status: Status
     winner: Optional[Winner] = None
-    home_lineup: Optional[List[Player]] = None
-    away_lineup: Optional[List[Player]] = None
+    # home_lineup: Optional[List[Player]] = None
+    # away_lineup: Optional[List[Player]] = None
 
     @field_validator("home_team", "away_team")
     @classmethod
@@ -81,6 +81,9 @@ class Match(BaseModel):
                 raise ValueError("Completed matches must have a winner")
         if self.status != Status.completed and self.winner is not None:
             raise ValueError("Only completed matches can have a winner")
+        if self.status is Status.upcoming and self.date < dt_date.today():
+            raise ValueError("Upcoming match date cannot be in the past")
+        
         return self
 
 

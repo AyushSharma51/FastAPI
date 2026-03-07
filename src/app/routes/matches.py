@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Body, Depends, Path, status
 from typing import Annotated
+from sqlalchemy.orm import Session
 
 from ..examples.match_examples import (
     CREATE_MATCH_EXAMPLES,
@@ -11,10 +12,10 @@ from ..services.service import (
     get_match_by_id,
     create_a_new_match,
     update_a_match,
-    replace_a_match, 
-    delete_a_match
+    replace_a_match,
+    delete_a_match,
 )
-from ..database import INITIAL_DATA
+from ..database import get_db
 
 from ..schema import (
     DateRangeFilters,
@@ -27,8 +28,11 @@ from ..schema import (
     SortParams,
 )
 
+#--------------------------------------------ROUTES----------------------------------------------------------------------
+
 router = APIRouter(prefix="/matches", tags=["Matches"])
 
+#---------------------------------------------GET(LIST)--------------------------------------------------------------------
 
 @router.get(
     "",
@@ -40,8 +44,9 @@ def list_matches(
     date_range: Annotated[DateRangeFilters, Depends()],
     pagination: Annotated[PaginationParams, Depends()],
     sort_params: Annotated[SortParams, Depends()],
+    db: Annotated[Session, Depends(get_db)],
 ):
-    return get_all_matches(INITIAL_DATA, filters, date_range, sort_params, pagination)
+    return get_all_matches(db, filters, date_range, sort_params, pagination)
 
 
 @router.get(
@@ -49,9 +54,13 @@ def list_matches(
     response_model=MatchResponse,
     response_model_exclude_none=True,
 )
-def get_match(match_id: Annotated[int, Path(ge=1, title="Match ID")]):
-    return get_match_by_id(INITIAL_DATA, match_id)
+def get_match(
+    match_id: Annotated[int, Path(ge=1, title="Match ID")],
+    db: Annotated[Session, Depends(get_db)],
+):
+    return get_match_by_id(db, match_id)
 
+#------------------------------------------POST(CREATE)-------------------------------------------------------------------
 
 @router.post(
     "",
@@ -64,9 +73,11 @@ def create_match(
         Match,
         Body(openapi_examples=CREATE_MATCH_EXAMPLES),
     ],
+    db: Annotated[Session, Depends(get_db)],
 ):
-    return create_a_new_match(INITIAL_DATA, match)
+    return create_a_new_match(db, match)
 
+#------------------------------------------PATCH(UPDATE)-----------------------------------------------------------------
 
 @router.patch(
     "/{match_id}",
@@ -79,9 +90,11 @@ def update_match(
         MatchUpdate,
         Body(openapi_examples=PATCH_MATCH_EXAMPLES),
     ],
+    db: Annotated[Session, Depends(get_db)],
 ):
-    return update_a_match(INITIAL_DATA, match_id, update)
+    return update_a_match(db, match_id, update)
 
+#---------------------------------------------PUT(REPLACE)---------------------------------------------------------------
 
 @router.put(
     "/{match_id}",
@@ -94,14 +107,19 @@ def replace_match(
         Match,
         Body(openapi_examples=PUT_MATCH_EXAMPLES),
     ],
+    db: Annotated[Session, Depends(get_db)],
 ):
-    return replace_a_match(INITIAL_DATA,match_id,match)
+    return replace_a_match(db, match_id, match)
+
+#-------------------------------------------------(DELETE)------------------------------------------------------------------
 
 @router.delete(
     "/{match_id}",
     response_model=MatchResponse,
     response_model_exclude_none=True,
 )
-def delete_match(match_id: Annotated[int, Path(ge=1, title="Match ID")]):
-    return delete_a_match(INITIAL_DATA,match_id)
-
+def delete_match(
+    match_id: Annotated[int, Path(ge=1, title="Match ID")],
+    db: Annotated[Session, Depends(get_db)],
+):
+    return delete_a_match(db, match_id)

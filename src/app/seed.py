@@ -1,8 +1,14 @@
-from .schema import Match,Sport, Winner, Status
-from typing import List
 from datetime import date as dt_date
 
-INITIAL_DATA: List[Match] = [
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from .schema import Match, Sport, Status, Winner
+
+from .database import engine, create_tables
+from .db_models import MatchModel
+
+
+SEED_MATCHES = [
     Match(
         id=1,
         home_team="Arsenal",
@@ -38,7 +44,7 @@ INITIAL_DATA: List[Match] = [
         home_team="Knicks",
         away_team="Celtics",
         sport=Sport.basketball,
-        date=dt_date(2026, 3, 5),
+        date=dt_date(2027, 3, 5),
         status=Status.upcoming,
         winner=None,
         venue="Madison Square Garden",
@@ -74,3 +80,21 @@ INITIAL_DATA: List[Match] = [
         venue="Crypto.com Arena",
     ),
 ]
+
+
+def seed():
+    create_tables()
+
+    with Session(engine) as db:
+        existing = db.execute(select(MatchModel)).scalars().first()  
+        if existing:                                                   
+            print("Database already seeded — skipping.")              
+            return                                                     
+
+        db.add_all(SEED_MATCHES)  
+        db.commit()
+        print(f"Seeded {len(SEED_MATCHES)} matches.")
+
+
+if __name__ == "__main__":
+    seed()
