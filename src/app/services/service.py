@@ -116,31 +116,17 @@ def update_a_match(db, match_id, update):
     # Only the fields the client explicitly sent
     update_data = update.model_dump(exclude_unset=True)
 
-    # Validate the merged result before writing — same business rules as before
-    stored_as_dict = {
-        "id": db_match.id,
-        "home_team": db_match.home_team,
-        "away_team": db_match.away_team,
-        "venue": db_match.venue,
-        "date": db_match.date,
-        "sport": db_match.sport,
-        "status": db_match.status,
-        "winner": db_match.winner,
-    }
-    merged = {**stored_as_dict, **update_data}
-    try:
-        Match.model_validate(merged)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e),
-        )
-
-    # Apply updates to the database model's attributes
-    for field, value in update_data.items():
-        if hasattr(db_match, field):
-            db_value = value.value if hasattr(value, "value") else value
-            setattr(db_match, field, db_value)
+    if "venue" in update_data:
+        db_match.venue = update_data["venue"]
+    if "date" in update_data:
+        db_match.date = update_data["data"]
+    if "status" in update_data:
+        db_match.status = update_data["status"]
+    if "winner" in update_data:
+        db_match.winner = update_data["winner"]
+    
+    
+    
 
     db.commit()
     db.refresh(db_match)

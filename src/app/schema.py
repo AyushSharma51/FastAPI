@@ -89,6 +89,7 @@ class Match(BaseModel):
 
 class MatchUpdate(BaseModel):
     """Model for partial updates to a match. All fields are optional."""
+    
 
     venue: Optional[str] = Field(
         None,
