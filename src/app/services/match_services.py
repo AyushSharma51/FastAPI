@@ -1,52 +1,59 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, select
-from ..db_models import MatchModel
-from ..schema import Winner, TeamFilter, Match
+from ..db_models import MatchModel, TeamModel
+from ..schemas.match_schemas import Winner, TeamFilter, Match
 from fastapi import HTTPException, status
 
-#---------------------------------------------GET ALL MATCHES---------------------------------------------------------------
+# ---------------------------------------------GET ALL MATCHES---------------------------------------------------------------
+
 
 def get_all_matches(db, filters, date_range, sort_params, pagination):
-    query = select(MatchModel)
+    query = select(MatchModel).options(
+        joinedload(MatchModel.home_team),
+        joinedload(MatchModel.away_team),  # Add this to fix N+1 for winners
+    )
 
     if filters.sport:
         query = query.where(MatchModel.sport == filters.sport.value)
     if filters.status:
         query = query.where(MatchModel.status == filters.status.value)
+    if filters.is_draw is not None:
+        query = query.where(MatchModel.is_draw == filters.is_draw)
 
-    if filters.winner:
-        query = query.where(MatchModel.winner == filters.winner.value)
+    if filters.winner_id:
+        query = query.where(MatchModel.winner == filters.winner_id)
     if filters.team:
         query = query.where(
-            (MatchModel.home_team.contains(filters.team))
-            | (MatchModel.away_team.contains(filters.team))
+            MatchModel.home_team.has(TeamModel.name.contains(filters.team))
+            | MatchModel.away_team.has(TeamModel.name.contains(filters.team))
         )
+
     if filters.team_filter and filters.team:
         if filters.team_filter == TeamFilter.won:
             query = query.where(
                 (
-                    (MatchModel.winner == Winner.home_team.value)
+                    (MatchModel.winner_id == Winner.home_team.value)
                     & (MatchModel.home_team.contains(filters.team))
                 )
                 | (
-                    (MatchModel.winner == Winner.away_team.value)
+                    (MatchModel.winner_id == Winner.away_team.value)
                     & (MatchModel.away_team.contains(filters.team))
                 )
             )
         elif filters.team_filter == TeamFilter.lost:
             query = query.where(
                 (
-                    (MatchModel.winner == Winner.away_team.value)
+                    (MatchModel.winner_id == Winner.away_team.value)
                     & (MatchModel.home_team.contains(filters.team))
                 )
                 | (
-                    (MatchModel.winner == Winner.home_team.value)
+                    (MatchModel.winner_id == Winner.home_team.value)
                     & (MatchModel.away_team.contains(filters.team))
                 )
             )
         elif filters.team_filter == TeamFilter.draw:
             query = query.where(
-                (MatchModel.winner == Winner.draw.value)
+                (MatchModel.winner_id == Winner.draw.value)
                 & (
                     (MatchModel.home_team.contains(filters.team))
                     | (MatchModel.away_team.contains(filters.team))
@@ -81,17 +88,21 @@ def get_all_matches(db, filters, date_range, sort_params, pagination):
         "matches": matches,
     }
 
-#---------------------------------------------------GET MATCH BY ID---------------------------------------------------------------
+
+# ---------------------------------------------------GET MATCH BY ID---------------------------------------------------------------
+
 
 def get_match_by_id(db, match_id):
     match = db.get(MatchModel, match_id)
+
     if match is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Match not found"
         )
     return match
 
-#---------------------------------------------------CREATE A NEW MATCH-------------------------------------------------------------
+
+# ---------------------------------------------------CREATE A NEW MATCH-------------------------------------------------------------
 
 
 def create_a_new_match(db: Session, match: Match):
@@ -104,7 +115,9 @@ def create_a_new_match(db: Session, match: Match):
 
     return db_match
 
-#-----------------------------------------------------UPDATE A MATCH---------------------------------------------------------------
+
+# -----------------------------------------------------UPDATE A MATCH---------------------------------------------------------------
+
 
 def update_a_match(db, match_id, update):
     db_match = db.get(MatchModel, match_id)
@@ -123,16 +136,19 @@ def update_a_match(db, match_id, update):
     if "status" in update_data:
         db_match.status = update_data["status"]
     if "winner" in update_data:
-        db_match.winner = update_data["winner"]
-    
-    
-    
+        db_match.winner_id = update_data["winner_id"]
+    if "is_draw" in update_data:
+        db_match.is_draw = update_data["is_draw"]
+        if update_data["is_draw"]:
+            db_match.winner_id = None
 
     db.commit()
     db.refresh(db_match)
     return db_match
 
-#------------------------------------------------REPLACE A MATCH---------------------------------------------------------------------
+
+# ------------------------------------------------REPLACE A MATCH---------------------------------------------------------------------
+
 
 def replace_a_match(db, match_id, match):
     db_match = db.get(MatchModel, match_id)
@@ -142,19 +158,22 @@ def replace_a_match(db, match_id, match):
         )
 
     # Overwrite every field
-    db_match.home_team = match.home_team
-    db_match.away_team = match.away_team
+    db_match.home_team_id = match.home_team_id
+    db_match.away_team_id = match.away_team_id
     db_match.venue = match.venue
     db_match.date = match.date
     db_match.sport = match.sport.value
     db_match.status = match.status.value
-    db_match.winner = match.winner.value if match.winner else None
+    db_match.is_draw = match.is_draw.value
+    db_match.winner_id = match.winner_id.value if match.winner_id else None
 
     db.commit()
     db.refresh(db_match)
     return db_match
 
-#--------------------------------------------------DELETE A MATCH--------------------------------------------------------------------------
+
+# --------------------------------------------------DELETE A MATCH--------------------------------------------------------------------------
+
 
 def delete_a_match(db, match_id):
     db_match = db.get(MatchModel, match_id)

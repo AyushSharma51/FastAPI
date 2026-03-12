@@ -3,6 +3,7 @@ from enum import Enum
 from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
+
 class Sport(str, Enum):
     football = "football"
     cricket = "cricket"
@@ -41,12 +42,8 @@ class Player(BaseModel):
 
 class Match(BaseModel):
     id: Optional[int] = None
-    home_team: str = Field(
-        min_length=2, max_length=50, examples=["Arsenal", "Real Madrid"]
-    )
-    away_team: str = Field(
-        min_length=2, max_length=50, examples=["Chelsea", "Barcelona"]
-    )
+    home_team_id: int
+    away_team_id: int
     venue: Optional[str] = Field(
         None,
         min_length=3,
@@ -56,14 +53,10 @@ class Match(BaseModel):
     date: dt_date
     sport: Sport
     status: Status
-    winner: Optional[Winner] = None
-    # home_lineup: Optional[List[Player]] = None
-    # away_lineup: Optional[List[Player]] = None
-
-    @field_validator("home_team", "away_team")
-    @classmethod
-    def normalize_team_name(cls, value):
-        return value.strip().lower()
+    is_draw: bool = False
+    winner_id: Optional[int] = Field(
+        None, title="Winner Team ID", description="Filter matches by winner team ID"
+    )
 
     @field_validator("venue")
     @classmethod
@@ -74,22 +67,32 @@ class Match(BaseModel):
 
     @model_validator(mode="after")
     def validate_match_logic(self):
-        if self.home_team == self.away_team:
+        if self.home_team_id == self.away_team_id:
             raise ValueError("home_team and away_team must be different")
         if self.status == Status.completed:
-            if self.winner is None:
+            if self.winner_id is None:
                 raise ValueError("Completed matches must have a winner")
-        if self.status != Status.completed and self.winner is not None:
+        if self.status != Status.completed and self.winner_id is not None:
             raise ValueError("Only completed matches can have a winner")
         if self.status is Status.upcoming and self.date < dt_date.today():
             raise ValueError("Upcoming match date cannot be in the past")
-        
+
+        return self
+    
+    @model_validator(mode="after")
+    def validate_draw_logic(self):
+
+        if self.is_draw and self.winner_id is not None:
+            raise ValueError("Draw match cannot have a winner")
+
+        if self.is_draw and self.status != "finished":
+            raise ValueError("Match must be finished to declare a draw")
+
         return self
 
 
 class MatchUpdate(BaseModel):
     """Model for partial updates to a match. All fields are optional."""
-    
 
     venue: Optional[str] = Field(
         None,
@@ -99,9 +102,10 @@ class MatchUpdate(BaseModel):
     )
     date: Optional[dt_date] = None
     status: Optional[Status] = Field(None, examples=["completed"])
-    winner: Optional[Winner] = Field(None, examples=["home_team"])
-    home_lineup: Optional[List[Player]] = None
-    away_lineup: Optional[List[Player]] = None
+    is_draw: bool = False
+    Field(None, title="Winner Team ID", description="Filter matches by winner team ID")
+    winner_id: Optional[int]= None
+
 
     @field_validator("venue")
     @classmethod
@@ -112,26 +116,41 @@ class MatchUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_update_logic(self):
-        if self.status == Status.completed and self.winner is None:
+        if self.status == Status.completed and self.winner_id is None:
             raise ValueError(
                 "Cannot set status to completed without providing a winner"
             )
-        if self.status != Status.completed and self.winner is not None:
+        if self.status != Status.completed and self.winner_id is not None:
             raise ValueError("Cannot set winner for non-completed matches")
         return self
+    
+    @model_validator(mode="after")
+    def validate_draw_logic(self):
+
+        if self.is_draw and self.winner_id is not None:
+            raise ValueError("Draw match cannot have a winner")
+
+        if self.is_draw and self.status != "finished":
+            raise ValueError("Match must be finished to declare a draw")
+
+        return self
+
+
+class TeamResponse(BaseModel):
+    id: int
+    name: str
 
 
 class MatchResponse(BaseModel):
     id: int
-    home_team: str
-    away_team: str
+    home_team: TeamResponse
+    away_team: TeamResponse
     venue: Optional[str] = None
     date: dt_date
     sport: Sport
     status: Status
-    winner: Optional[Winner] = None
-    home_lineup: Optional[List[Player]] = None
-    away_lineup: Optional[List[Player]] = None
+    is_draw: bool = False
+    winner_id: Optional[int] = None
 
 
 class MatchListResponse(BaseModel):
@@ -152,11 +171,11 @@ class MatchFilters(BaseModel):
         title="Match Status",
         description="Filter by match status",
     )
-    winner: Optional[Winner] = Field(
-        None,
-        title="Winner",
-        description="Filter by match winner",
+    is_draw: bool = False
+    winner_id: Optional[int] = Field(
+        None, title="Winner Team ID", description="Filter matches by winner team ID"
     )
+
     team: Optional[str] = Field(
         None,
         min_length=3,
@@ -174,9 +193,9 @@ class MatchFilters(BaseModel):
 
     @model_validator(mode="after")
     def validate_winner_and_team_filter(self):
-        if self.team_filter and self.winner:
+        if self.team_filter and self.winner_id:
             raise ValueError("team_filter and winner cannot be used together")
-        if (self.team_filter or self.winner) and self.status not in (
+        if (self.team_filter or self.winner_id) and self.status not in (
             Status.completed,
             None,
         ):
@@ -189,8 +208,19 @@ class MatchFilters(BaseModel):
     @classmethod
     def normalize_team(cls, value):
         if value is not None:
-            return value.strip().lower()
+            return value.strip()
         return value
+    
+    @model_validator(mode="after")
+    def validate_draw_logic(self):
+
+        if self.is_draw and self.winner_id is not None:
+            raise ValueError("Draw match cannot have a winner")
+
+        if self.is_draw and self.status != "finished":
+            raise ValueError("Match must be finished to declare a draw")
+
+        return self
 
 
 class DateRangeFilters(BaseModel):
@@ -223,7 +253,8 @@ class PaginationParams(BaseModel):
     @property
     def offset(self) -> int:
         return (self.page - 1) * self.limit
-    
+
+
 class SortParams(BaseModel):
     sort_by: Optional[Literal["date", "sport", "status"]] = Field(
         None,

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from .routes.matches import router as matches_router
+from .routes.teams import router as teams_router
 from .database import create_tables
 
 
@@ -14,6 +15,7 @@ def on_startup():
 
 
 app.include_router(matches_router)
+app.include_router(teams_router)
 
 
 @app.get("/health", tags=["System"])

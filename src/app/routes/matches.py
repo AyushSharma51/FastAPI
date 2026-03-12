@@ -7,7 +7,7 @@ from ..examples.match_examples import (
     PATCH_MATCH_EXAMPLES,
     PUT_MATCH_EXAMPLES,
 )
-from ..services.service import (
+from ..services.match_services import (
     get_all_matches,
     get_match_by_id,
     create_a_new_match,
@@ -17,7 +17,7 @@ from ..services.service import (
 )
 from ..database import get_db
 
-from ..schema import (
+from ..schemas.match_schemas import (
     DateRangeFilters,
     Match,
     MatchFilters,
