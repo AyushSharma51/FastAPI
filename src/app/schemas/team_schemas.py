@@ -1,5 +1,6 @@
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from datetime import date as dt_date
 
 
 class TeamBase(BaseModel):
@@ -8,6 +9,11 @@ class TeamBase(BaseModel):
     founded_year: int = Field(ge=1800, le=2030)
     stadium: Optional[str] = Field(None, min_length=3, max_length=100)
 
+    @field_validator("founded_year")
+    def validate_year(cls, value):
+        if value > dt_date.today().year:
+            raise ValueError("Founded year cannot be in the future")
+        return value
 
 class TeamCreate(TeamBase):
     pass

@@ -1,35 +1,209 @@
-from sqlalchemy import Date, ForeignKey, String, Integer, Boolean
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from datetime import date as dt_date
+
+from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
 
 
-class MatchModel(Base):
-    __tablename__ = "matches"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    home_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
-    away_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
-    venue: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    date: Mapped[dt_date] = mapped_column(Date)
-    sport: Mapped[str] = mapped_column(String(20))
-    status: Mapped[str] = mapped_column(String(20))
-    winner_id: Mapped[int| None] = mapped_column(ForeignKey("teams.id"), nullable=True)
-    is_draw:Mapped[bool] = mapped_column(Boolean,default=False)                #add this functionality
-
-    home_team: Mapped["TeamModel"] = relationship(foreign_keys=[home_team_id])
-    away_team: Mapped["TeamModel"] = relationship(foreign_keys=[away_team_id])
-    winner: Mapped["TeamModel"] = relationship(foreign_keys=[winner_id])
+# -------------------------
+# League
+# -------------------------
 
 
-class TeamModel(Base):
+class League(Base):
+    __tablename__ = "leagues"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    country: Mapped[str] = mapped_column(String(100))
+
+    seasons: Mapped[list["Season"]] = relationship(back_populates="league")
+
+
+# -------------------------
+# Season
+# -------------------------
+
+
+class Season(Base):
+    __tablename__ = "seasons"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    league_id: Mapped[int] = mapped_column(ForeignKey("leagues.id"))
+    year: Mapped[int]
+    start_date: Mapped[dt_date]
+    end_date: Mapped[dt_date]
+
+    league: Mapped["League"] = relationship(back_populates="seasons")
+    matches: Mapped[list["Match"]] = relationship(back_populates="season")
+    team_players: Mapped[list["TeamPlayer"]] = relationship(back_populates="season")
+    standings: Mapped[list["Standing"]] = relationship(back_populates="season")
+
+
+# -------------------------
+# Team
+# -------------------------
+
+
+class Team(Base):
     __tablename__ = "teams"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(50))
-    city: Mapped[str] = mapped_column(String(50))
-    founded_year: Mapped[int] = mapped_column(Integer)
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    name: Mapped[str] = mapped_column(String(100))
+    city: Mapped[str] = mapped_column(String(100))
+    founded_year: Mapped[int]
     stadium: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    players: Mapped[list["TeamPlayer"]] = relationship(back_populates="team")
+    match_participations: Mapped[list["MatchParticipant"]] = relationship(
+        back_populates="team"
+    )
+    standings: Mapped[list["Standing"]] = relationship(back_populates="team")
+
+
+# -------------------------
+# Player
+# -------------------------
+
+
+class Player(Base):
+    __tablename__ = "players"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    name: Mapped[str] = mapped_column(String(100))
+    birth_date: Mapped[dt_date]
+    nationality: Mapped[str] = mapped_column(String(100))
+
+    teams: Mapped[list["TeamPlayer"]] = relationship(back_populates="player")
+    match_stats: Mapped[list["PlayerMatchStat"]] = relationship(back_populates="player")
+
+
+# -------------------------
+# Team Player (Roster)
+# -------------------------
+
+
+class TeamPlayer(Base):
+    __tablename__ = "team_players"
+
+    __table_args__ = (
+        UniqueConstraint("team_id", "player_id", "season_id", name="uq_roster_entry"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"))
+
+    jersey_number: Mapped[int | None]
+
+    team: Mapped["Team"] = relationship(back_populates="players")
+    player: Mapped["Player"] = relationship(back_populates="teams")
+    season: Mapped["Season"] = relationship(back_populates="team_players")
+
+
+# -------------------------
+# Match
+# -------------------------
+
+
+class Match(Base):
+    __tablename__ = "matches"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"))
+
+    venue: Mapped[str] = mapped_column(String(100))
+    date: Mapped[dt_date]
+    status: Mapped[str] = mapped_column(String(50))
+
+    season: Mapped["Season"] = relationship(back_populates="matches")
+    participants: Mapped[list["MatchParticipant"]] = relationship(
+        back_populates="match"
+    )
+    player_stats: Mapped[list["PlayerMatchStat"]] = relationship(back_populates="match")
+
+
+# -------------------------
+# Match Participants (Teams in Match)
+# -------------------------
+
+
+class MatchParticipant(Base):
+    __tablename__ = "match_participants"
+
+    __table_args__ = (
+        UniqueConstraint("match_id", "is_home", name="uq_match_home_side"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"))
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
+
+    is_home: Mapped[bool] = mapped_column(Boolean)
+    score: Mapped[int | None]
+
+    @property
+    def is_winner(self) -> bool | None:
+        if self.score is None:
+            return None
+        other = next((p for p in self.match.participants if p.id != self.id), None)
+        if other is None or other.score is None:
+            return None
+        return self.score > other.score
+
+    match: Mapped["Match"] = relationship(back_populates="participants")
+    team: Mapped["Team"] = relationship(back_populates="match_participations")
+
+
+# -------------------------
+# Player Match Stats
+# -------------------------
+
+
+class PlayerMatchStat(Base):
+    __tablename__ = "player_match_stats"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"))
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+
+    goals: Mapped[int] = mapped_column(default=0)
+    assists: Mapped[int] = mapped_column(default=0)
+    minutes_played: Mapped[int] = mapped_column(default=0)
+
+    match: Mapped["Match"] = relationship(back_populates="player_stats")
+    player: Mapped["Player"] = relationship(back_populates="match_stats")
+
+
+# -------------------------
+# Standings
+# -------------------------
+
+
+class Standing(Base):
+    __tablename__ = "standings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"))
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
+
+    matches_played: Mapped[int] = mapped_column(default=0)
+    wins: Mapped[int] = mapped_column(default=0)
+    draws: Mapped[int] = mapped_column(default=0)
+    losses: Mapped[int] = mapped_column(default=0)
+    points: Mapped[int] = mapped_column(default=0)
+
+    season: Mapped["Season"] = relationship(back_populates="standings")
+    team: Mapped["Team"] = relationship(back_populates="standings")

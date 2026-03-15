@@ -1,11 +1,9 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from ..db_models import TeamModel
+from ..db_models import Team as TeamModel
 
 
-def create_team(
-    db: Session, name: str, city: str, founded_year: int, stadium: str | None = None
-):
+def create_team(db: Session, name: str, city: str, founded_year: int, stadium: str):
     """Create a new team"""
     team = TeamModel(name=name, city=city, founded_year=founded_year, stadium=stadium)
     db.add(team)

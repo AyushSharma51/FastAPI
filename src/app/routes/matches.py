@@ -18,21 +18,20 @@ from ..services.match_services import (
 from ..database import get_db
 
 from ..schemas.match_schemas import (
-    DateRangeFilters,
     Match,
-    MatchFilters,
     MatchListResponse,
     MatchResponse,
     MatchUpdate,
-    PaginationParams,
-    SortParams,
 )
+from ..schemas.common_schemas import PaginationParams, SortParams, DateRangeFilters
 
-#--------------------------------------------ROUTES----------------------------------------------------------------------
+
+# --------------------------------------------ROUTES----------------------------------------------------------------------
 
 router = APIRouter(prefix="/matches", tags=["Matches"])
 
-#---------------------------------------------GET(LIST)--------------------------------------------------------------------
+# ---------------------------------------------GET(LIST)--------------------------------------------------------------------
+
 
 @router.get(
     "",
@@ -40,7 +39,7 @@ router = APIRouter(prefix="/matches", tags=["Matches"])
     response_model_exclude_none=True,
 )
 def list_matches(
-    filters: Annotated[MatchFilters, Depends()],
+    filters: Annotated[Match, Depends()],
     date_range: Annotated[DateRangeFilters, Depends()],
     pagination: Annotated[PaginationParams, Depends()],
     sort_params: Annotated[SortParams, Depends()],
@@ -60,7 +59,9 @@ def get_match(
 ):
     return get_match_by_id(db, match_id)
 
-#------------------------------------------POST(CREATE)-------------------------------------------------------------------
+
+# ------------------------------------------POST(CREATE)-------------------------------------------------------------------
+
 
 @router.post(
     "",
@@ -77,7 +78,9 @@ def create_match(
 ):
     return create_a_new_match(db, match)
 
-#------------------------------------------PATCH(UPDATE)-----------------------------------------------------------------
+
+# ------------------------------------------PATCH(UPDATE)-----------------------------------------------------------------
+
 
 @router.patch(
     "/{match_id}",
@@ -94,7 +97,9 @@ def update_match(
 ):
     return update_a_match(db, match_id, update)
 
-#---------------------------------------------PUT(REPLACE)---------------------------------------------------------------
+
+# ---------------------------------------------PUT(REPLACE)---------------------------------------------------------------
+
 
 @router.put(
     "/{match_id}",
@@ -111,7 +116,9 @@ def replace_match(
 ):
     return replace_a_match(db, match_id, match)
 
-#-------------------------------------------------(DELETE)------------------------------------------------------------------
+
+# -------------------------------------------------(DELETE)------------------------------------------------------------------
+
 
 @router.delete(
     "/{match_id}",

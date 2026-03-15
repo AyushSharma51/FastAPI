@@ -5,7 +5,7 @@ from ..database import get_db
 from ..schemas.team_schemas import TeamCreate, TeamResponse
 from ..services.team_services import create_team, get_all_teams
 # --------------------------------------------ROUTES----------------------------------------------------------------------
-router = APIRouter(prefix="/teams", tags=["teams"])
+router = APIRouter(prefix="/teams", tags=["Teams"])
 
 
 @router.get("", status_code=status.HTTP_200_OK)
