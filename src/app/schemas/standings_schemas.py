@@ -1,4 +1,6 @@
 from pydantic import BaseModel, Field, model_validator
+from ..schemas.season_schemas import SeasonResponsewoLeague
+from ..schemas.team_schemas import TeamResponse
 
 
 
@@ -37,6 +39,8 @@ class StandingsCreate(Standings):
 
 class StandingsResponse(Standings):
     id: int
+    season: SeasonResponsewoLeague
+    team:TeamResponse
 
     class Config:
         from_attributes = True

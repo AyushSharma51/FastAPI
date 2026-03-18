@@ -18,9 +18,14 @@ class TeamBase(BaseModel):
 class TeamCreate(TeamBase):
     pass
 
-
 class TeamResponse(TeamBase):
     id: int
 
     class Config:
         from_attributes = True
+
+class TeamNameResponse(BaseModel):
+    name: str 
+    class Config:
+        from_attributes = True
+

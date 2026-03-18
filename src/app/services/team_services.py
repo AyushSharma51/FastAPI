@@ -1,11 +1,12 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from ..db_models import Team as TeamModel
+from ..schemas.team_schemas import TeamCreate
 
 
-def create_team(db: Session, name: str, city: str, founded_year: int, stadium: str):
+def create_team(db: Session, team: TeamCreate):
     """Create a new team"""
-    team = TeamModel(name=name, city=city, founded_year=founded_year, stadium=stadium)
+    team = TeamModel(**team.model_dump())
     db.add(team)
     db.commit()
     db.refresh(team)

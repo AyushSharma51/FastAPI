@@ -17,8 +17,8 @@ class League(Base):
     __tablename__ = "leagues"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(100))
-    country: Mapped[str] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+
 
     seasons: Mapped[list["Season"]] = relationship(back_populates="league")
 
@@ -34,7 +34,8 @@ class Season(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     league_id: Mapped[int] = mapped_column(ForeignKey("leagues.id"))
-    year: Mapped[int]
+    country: Mapped[str] = mapped_column(String(100))
+    
     start_date: Mapped[dt_date]
     end_date: Mapped[dt_date]
 
@@ -54,7 +55,7 @@ class Team(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    name: Mapped[str] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(100), unique=True)
     city: Mapped[str] = mapped_column(String(100))
     founded_year: Mapped[int]
     stadium: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -76,7 +77,7 @@ class Player(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    name: Mapped[str] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(100), unique=True)
     birth_date: Mapped[dt_date]
     nationality: Mapped[str] = mapped_column(String(100))
 

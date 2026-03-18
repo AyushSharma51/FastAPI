@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..schemas.team_schemas import TeamCreate, TeamResponse
 from ..services.team_services import create_team, get_all_teams
+
 # --------------------------------------------ROUTES----------------------------------------------------------------------
 router = APIRouter(prefix="/teams", tags=["Teams"])
 
@@ -12,14 +13,9 @@ router = APIRouter(prefix="/teams", tags=["Teams"])
 def list_all_teams(db: Annotated[Session, Depends(get_db)]):
     return get_all_teams(db)
 
+
 # ------------------------------------------POST(CREATE)-------------------------------------------------------------------
 @router.post("", response_model=TeamResponse, status_code=status.HTTP_201_CREATED)
 def create_new_team(team: TeamCreate, db: Annotated[Session, Depends(get_db)]):
     """Create a new team"""
-    return create_team(
-        db=db,
-        name=team.name,
-        city=team.city,
-        founded_year=team.founded_year,
-        stadium=team.stadium,
-    )
+    return create_team(db, team)

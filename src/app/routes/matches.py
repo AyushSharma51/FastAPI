@@ -19,6 +19,7 @@ from ..database import get_db
 
 from ..schemas.match_schemas import (
     Match,
+    MatchFilters,
     MatchListResponse,
     MatchResponse,
     MatchUpdate,
@@ -39,7 +40,7 @@ router = APIRouter(prefix="/matches", tags=["Matches"])
     response_model_exclude_none=True,
 )
 def list_matches(
-    filters: Annotated[Match, Depends()],
+    filters: Annotated[MatchFilters, Depends()],  
     date_range: Annotated[DateRangeFilters, Depends()],
     pagination: Annotated[PaginationParams, Depends()],
     sort_params: Annotated[SortParams, Depends()],
@@ -50,7 +51,7 @@ def list_matches(
 
 @router.get(
     "/{match_id}",
-    response_model=MatchResponse,
+    response_model=MatchListResponse,
     response_model_exclude_none=True,
 )
 def get_match(
@@ -65,8 +66,7 @@ def get_match(
 
 @router.post(
     "",
-    response_model=MatchResponse,
-    response_model_exclude_none=True,
+    response_model=MatchResponse,             #if match is completed update in standings
     status_code=status.HTTP_201_CREATED,
 )
 def create_match(

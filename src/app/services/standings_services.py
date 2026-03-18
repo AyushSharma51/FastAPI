@@ -1,18 +1,28 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session
-from..db_models import Standing as StandingsModel
+from sqlalchemy.orm import Session, joinedload
+from ..db_models import Standing as StandingsModel
+from ..schemas.standings_schemas import StandingsCreate
 
 
-def create_standing(db:Session,season_id:int, team_id:int,matches_played:int, wins:int, draws:int, losses:int, points:int):
-    
-    standings = StandingsModel(season_id=season_id, team_id=team_id,matches_played=matches_played, wins=wins, draws=draws, losses=losses, points=points)
+def create_standing(
+    db: Session, standing:StandingsCreate
+
+):
+    standings = StandingsModel(**standing.model_dump())
     db.add(standings)
     db.commit()
     db.refresh(standings)
     return standings
 
-def list_standings(db:Session):
-    query = select(StandingsModel)
-    stadings = db.execute(query).scalars().all()
-    return stadings
 
+def list_standings(db: Session):
+    query=select(StandingsModel).options(
+        joinedload(StandingsModel.season),
+        joinedload(StandingsModel.team)
+    )
+
+    standings = db.execute(query).scalars().all()
+    return standings
+
+
+#update standings for other fields

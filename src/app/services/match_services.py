@@ -9,56 +9,11 @@ from fastapi import HTTPException, status
 
 def get_all_matches(db, filters, date_range, sort_params, pagination):
     query = select(MatchModel).options(
-        joinedload(MatchModel.home_team),
-        joinedload(MatchModel.away_team),  # Add this to fix N+1 for winners
+        joinedload(MatchModel.season)  # Add this to fix N+1 for winners
     )
 
-    # if filters.sport:
-    #     query = query.where(MatchModel.sport == filters.sport.value)
     if filters.status:
         query = query.where(MatchModel.status == filters.status.value)
-    # if filters.is_draw is not None:
-    #     query = query.where(MatchModel.is_draw == filters.is_draw)
-
-    # if filters.winner_id:
-    #     query = query.where(MatchModel.winner == filters.winner_id)
-    # if filters.team:
-    #     query = query.where(
-    #         MatchModel.home_team.has(TeamModel.name.contains(filters.team))
-    #         | MatchModel.away_team.has(TeamModel.name.contains(filters.team))
-    #     )
-
-    # if filters.team_filter and filters.team:
-    #     if filters.team_filter == TeamFilter.won:
-    #         query = query.where(
-    #             (
-    #                 (MatchModel.winner_id == Winner.home_team.value)
-    #                 & (MatchModel.home_team.contains(filters.team))
-    #             )
-    #             | (
-    #                 (MatchModel.winner_id == Winner.away_team.value)
-    #                 & (MatchModel.away_team.contains(filters.team))
-    #             )
-    #         )
-    #     elif filters.team_filter == TeamFilter.lost:
-    #         query = query.where(
-    #             (
-    #                 (MatchModel.winner_id == Winner.away_team.value)
-    #                 & (MatchModel.home_team.contains(filters.team))
-    #             )
-    #             | (
-    #                 (MatchModel.winner_id == Winner.home_team.value)
-    #                 & (MatchModel.away_team.contains(filters.team))
-    #             )
-    #         )
-    #     elif filters.team_filter == TeamFilter.draw:
-    #         query = query.where(
-    #             (MatchModel.winner_id == Winner.draw.value)
-    #             & (
-    #                 (MatchModel.home_team.contains(filters.team))
-    #                 | (MatchModel.away_team.contains(filters.team))
-    #             )
-    #         )
 
     # Date range
     if date_range.from_date:
@@ -112,7 +67,7 @@ def create_a_new_match(db: Session, match: Match):
     db.add(db_match)
     db.commit()
     db.refresh(db_match)
-
+    # if db_match.status=completed
     return db_match
 
 

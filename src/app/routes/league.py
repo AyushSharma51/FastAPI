@@ -1,23 +1,24 @@
-from typing import Annotated
-from ..schemas.league_schemas import LeagueResponse , LeagueCreate
-from fastapi import APIRouter, Depends
+from typing import Annotated, List
+from ..schemas.league_schemas import LeagueResponse, LeagueCreate
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-
 from src.app.database import get_db
-
 from src.app.services.league_services import create_league, get_all_leagues
-
 
 router = APIRouter(prefix="/league", tags=["League"])
 
-@router.get("", response_model_exclude_none=True,)
+
+@router.get(
+    "",
+    response_model=List[LeagueResponse],
+    response_model_exclude_none=True,
+    status_code=status.HTTP_200_OK,
+)
 def list_league(db: Annotated[Session, Depends(get_db)]):
     return get_all_leagues(db)
 
-@router.post("", response_model= LeagueResponse)
-def create_a_new_league(league:LeagueCreate,db: Annotated[Session, Depends(get_db)]):
-        
-    return create_league(db=db,
-        name=league.name,
-        country=league.country,)
-        
+
+@router.post("", response_model=LeagueResponse, status_code=status.HTTP_201_CREATED)
+def create_a_new_league(league: LeagueCreate, db: Annotated[Session, Depends(get_db)]):
+
+    return create_league(db,league)
