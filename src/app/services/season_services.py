@@ -1,9 +1,10 @@
-from ..db_models import Season as SeasonModel, League as LeagueModel
-from ..schemas.season_schemas import SeasonCreate
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
-from ..schemas.season_schemas import LEAGUE_COUNTRY_MAP
-from fastapi import HTTPException
+
+from ..db_models import League as LeagueModel
+from ..db_models import Season as SeasonModel
+from ..schemas.season_schemas import SeasonCreate
 
 
 def list_season(db: Session):
@@ -22,15 +23,6 @@ def create_season(db: Session, season: SeasonCreate):
 
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
-
-    #  Validate league-country rule
-    expected_country = LEAGUE_COUNTRY_MAP.get(league.name)
-
-    if expected_country and season.country != expected_country.value:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{league.name} can only be played in {expected_country.value}",
-        )
 
     #  Create season
     season = SeasonModel(**season.model_dump())

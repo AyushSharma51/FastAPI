@@ -1,8 +1,55 @@
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, select
-from ..db_models import Match as MatchModel
-from ..schemas.match_schemas import Match
+from typing import List
+
 from fastapi import HTTPException, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, joinedload
+
+from ..db_models import Match as MatchModel
+from ..db_models import MatchParticipant as MatchParticipantModel
+from ..db_models import Season as SeasonModel
+from ..db_models import Team as TeamModel
+from ..schemas.match_schemas import MatchCreate
+
+
+def create_a_new_match(db: Session, matches: List[MatchCreate]):
+    results=[]
+    for match in matches:
+
+        # Validate season exists
+        season = db.get(SeasonModel, match.season_id)
+        if not season:
+            raise HTTPException(status_code=404, detail="Season not found")
+
+        # Validate both teams exist
+        for p in match.participants:
+            team = db.get(TeamModel, p.team_id)
+            if not team:
+                raise HTTPException(status_code=404, detail=f"Team {p.team_id} not found")
+
+        # Create the match — exclude participants, they're not a MatchModel field
+        db_match = MatchModel(**match.model_dump(exclude={"participants"}))
+        db.add(db_match)
+        db.flush()  # flush so db_match.id is available for participants foriegn key, but don't commit yet
+
+        # Create participants linked to the new match
+        if len(match.participants) < 2:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Two teams are required")
+        for p in match.participants:
+            db_participant = MatchParticipantModel(
+                match_id=db_match.id,
+                team_id=p.team_id,
+                is_home=p.is_home,
+           
+            )
+            db.add(db_participant)
+
+        db.commit()
+
+        # Refresh with relationships loaded for the response
+        db.refresh(db_match)
+        results.append(db_match)
+    return results
+
 
 # ---------------------------------------------GET ALL MATCHES---------------------------------------------------------------
 
@@ -60,17 +107,6 @@ def get_match_by_id(db, match_id):
 # ---------------------------------------------------CREATE A NEW MATCH-------------------------------------------------------------
 
 
-def create_a_new_match(db: Session, match: Match):
-
-    db_match = MatchModel(**match.model_dump())
-
-    db.add(db_match)
-    db.commit()
-    db.refresh(db_match)
-    # if db_match.status=completed
-    return db_match
-
-
 # -----------------------------------------------------UPDATE A MATCH---------------------------------------------------------------
 
 
@@ -90,13 +126,7 @@ def update_a_match(db, match_id, update):
         db_match.date = update_data["data"]
     if "status" in update_data:
         db_match.status = update_data["status"]
-    # if "winner" in update_data:
-    #     db_match.winner_id = update_data["winner_id"]
-    # if "is_draw" in update_data:
-    #     db_match.is_draw = update_data["is_draw"]
-    #     if update_data["is_draw"]:
-    #         db_match.winner_id = None
-
+ 
     db.commit()
     db.refresh(db_match)
     return db_match
@@ -112,15 +142,9 @@ def replace_a_match(db, match_id, match):
             status_code=status.HTTP_404_NOT_FOUND, detail="Match not found"
         )
 
-    # # Overwrite every field
-    # db_match.home_team_id = match.home_team_id
-    # db_match.away_team_id = match.away_team_id
     db_match.venue = match.venue
     db_match.date = match.date
-    # db_match.sport = match.sport.value
     db_match.status = match.status.value
-    # db_match.is_draw = match.is_draw.value
-    # db_match.winner_id = match.winner_id.value if match.winner_id else None
 
     db.commit()
     db.refresh(db_match)

@@ -2,23 +2,31 @@ CREATE_MATCH_EXAMPLES = {
     "basic": {
         "summary": "Basic upcoming match",
         "description": "Minimal required fields for creating a new match",
-        "value": {
+        "value": [{
             "season_id": 1,
             "date": "2026-03-15",
             "status": "upcoming",
             "venue": "Emirates Stadium",
-        },
+            "participants": [
+                {"team_id": 1, "is_home": "true"},
+                {"team_id": 2, "is_home": "false"},
+            ],
+        }],
     },
     "completed": {
         "summary": "Completed match",
         "description": "A finished match with a winner",
-        "value": {
+        "value": [{
             "season_id": 1,
             "date": "2025-10-26",
             "status": "completed",
             "venue": "Santiago Bernabeu",
-            "winner_id": "1",
-        },
+            "participants": [
+                {"team_id": 1, "is_home": "true"},
+                {"team_id": 2, "is_home": "false"},
+            ],
+            
+        }],
     },
 }
 
@@ -29,7 +37,6 @@ PATCH_MATCH_EXAMPLES = {
         "description": "Change the match venue without affecting other fields",
         "value": {"venue": "Wembley Stadium"},
     },
-
     "reschedule_match": {
         "summary": "Reschedule match date",
         "description": "Change the date and venue for an upcoming match",
@@ -45,7 +52,6 @@ PUT_MATCH_EXAMPLES = {
         "summary": "Replace with upcoming match",
         "description": "Completely replace match data with new upcoming match details",
         "value": {
-    
             "date": "2026-05-20",
             "status": "upcoming",
             "venue": "Etihad Stadium",
@@ -55,11 +61,9 @@ PUT_MATCH_EXAMPLES = {
         "summary": "Replace with completed match",
         "description": "Replace entire match with completed match data including winner",
         "value": {
- 
             "date": "2026-05-15",
             "status": "completed",
             "venue": "Wembley Stadium",
-      
         },
     },
 }

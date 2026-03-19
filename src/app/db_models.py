@@ -19,7 +19,6 @@ class League(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
 
-
     seasons: Mapped[list["Season"]] = relationship(back_populates="league")
 
 
@@ -35,14 +34,13 @@ class Season(Base):
 
     league_id: Mapped[int] = mapped_column(ForeignKey("leagues.id"))
     country: Mapped[str] = mapped_column(String(100))
-    
+
     start_date: Mapped[dt_date]
     end_date: Mapped[dt_date]
 
     league: Mapped["League"] = relationship(back_populates="seasons")
     matches: Mapped[list["Match"]] = relationship(back_populates="season")
     team_players: Mapped[list["TeamPlayer"]] = relationship(back_populates="season")
-    standings: Mapped[list["Standing"]] = relationship(back_populates="season")
 
 
 # -------------------------
@@ -64,7 +62,6 @@ class Team(Base):
     match_participations: Mapped[list["MatchParticipant"]] = relationship(
         back_populates="team"
     )
-    standings: Mapped[list["Standing"]] = relationship(back_populates="team")
 
 
 # -------------------------
@@ -151,7 +148,7 @@ class MatchParticipant(Base):
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
 
     is_home: Mapped[bool] = mapped_column(Boolean)
-    score: Mapped[int | None]
+  
 
     @property
     def is_winner(self) -> bool | None:
@@ -175,36 +172,19 @@ class PlayerMatchStat(Base):
     __tablename__ = "player_match_stats"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-
     match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"))
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))  # ← ADD THIS
 
     goals: Mapped[int] = mapped_column(default=0)
     assists: Mapped[int] = mapped_column(default=0)
     minutes_played: Mapped[int] = mapped_column(default=0)
 
+    # Also add a unique constraint — one stat row per player per match
+    __table_args__ = (
+        UniqueConstraint("match_id", "player_id", name="uq_player_match_stat"),
+    )
+
     match: Mapped["Match"] = relationship(back_populates="player_stats")
     player: Mapped["Player"] = relationship(back_populates="match_stats")
-
-
-# -------------------------
-# Standings
-# -------------------------
-
-
-class Standing(Base):
-    __tablename__ = "standings"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"))
-    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
-
-    matches_played: Mapped[int] = mapped_column(default=0)
-    wins: Mapped[int] = mapped_column(default=0)
-    draws: Mapped[int] = mapped_column(default=0)
-    losses: Mapped[int] = mapped_column(default=0)
-    points: Mapped[int] = mapped_column(default=0)
-
-    season: Mapped["Season"] = relationship(back_populates="standings")
-    team: Mapped["Team"] = relationship(back_populates="standings")
+    team: Mapped["Team"] = relationship()

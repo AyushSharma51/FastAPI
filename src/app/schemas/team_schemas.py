@@ -2,6 +2,9 @@ from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 from datetime import date as dt_date
 
+from ..schemas.player_schemas import PlayerResponse
+from ..schemas.season_schemas import SeasonResponsewoLeague
+
 
 class TeamBase(BaseModel):
     name: str = Field(min_length=2, max_length=50)
@@ -29,3 +32,30 @@ class TeamNameResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+
+# Team Players Schema 
+class TeamPlayers(BaseModel):
+    team_id: int = Field(gt=0)
+    player_id: int = Field(gt=0)
+    season_id: int = Field(gt=0)
+    jersey_number: int = Field(ge=1, le=99)
+
+
+
+class TeamPlayersCreate(TeamPlayers):
+    pass
+
+
+class TeamPlayersResponse(TeamPlayers):
+    id: int
+    team:TeamResponse
+    player:PlayerResponse
+    season:SeasonResponsewoLeague
+    class Config:
+        from_attributes = True
+
+class TeamPlayersLite(BaseModel):
+    team: TeamNameResponse
+    class Config:
+        from_attributes = True
