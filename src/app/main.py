@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import  FastAPI
 
 from .database import create_tables
 from .routes.league import router as league_router
@@ -9,7 +9,7 @@ from .routes.players import stats_router
 from .routes.seasons import router as season_router
 from .routes.standings import router as standings_router
 from .routes.teams import router as teams_router
-
+from .security.auth import router as auth_router
 app = FastAPI(title="FOOTBALL LEAGUE MANAGEMENT SYSTEM")
 
 
@@ -17,7 +17,7 @@ app = FastAPI(title="FOOTBALL LEAGUE MANAGEMENT SYSTEM")
 def on_startup():
     create_tables()
 
-
+app.include_router(auth_router)
 app.include_router(league_router)
 app.include_router(season_router)
 app.include_router(teams_router)

@@ -49,9 +49,22 @@ html, body, [class*="css"] {{
 @st.cache_data(ttl=60)
 def fetch(endpoint, params=None):
     try:
-        res = requests.get(f"{API_BASE_URL}{endpoint}", params=params, timeout=5)
+        headers = {}
+
+        # ADD TOKEN IN HEADER
+        if "token" in st.session_state:
+            headers["Authorization"] = f"Bearer {st.session_state['token']}"
+
+        res = requests.get(
+            f"{API_BASE_URL}{endpoint}",
+            params=params,
+            headers=headers,
+            timeout=5
+        )
+
         res.raise_for_status()
         return res.json()
+
     except requests.exceptions.RequestException as e:
         st.error(f"API Error: {e}")
         return None
@@ -223,6 +236,36 @@ def render_teams():
 # ---------------- MAIN ----------------
 def main():
     st.sidebar.title("Dashboard")
+# ---------------- AUTH ----------------
+    st.sidebar.subheader("Login")
+
+    if "token" not in st.session_state:
+        username = st.sidebar.text_input("Username")
+        password = st.sidebar.text_input("Password", type="password")
+
+        if st.sidebar.button("Login"):
+            res = requests.post(
+                f"{API_BASE_URL}/token",
+                data={"username": username, "password": password},
+            )
+
+            if res.status_code == 200:
+                st.session_state["token"] = res.json()["access_token"]
+                st.success("Login successful")
+            else:
+                st.error("Login failed")
+
+    else:
+        st.sidebar.success("Logged in")
+
+        if st.sidebar.button("Logout"):
+            st.session_state.pop("token", None)
+            st.rerun()
+    
+        #BLOCK ACCESS IF NOT LOGGED IN
+    if "token" not in st.session_state:
+        st.warning("Please login to access dashboard")
+        return
 
     menu = st.sidebar.radio("Navigation", ["Match Explorer", "Players", "Teams"])
 
@@ -232,7 +275,7 @@ def main():
         render_players()
     else:
         render_teams()
-
+    
 
 if __name__ == "__main__":
     main()
