@@ -1,6 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
-from datetime import date as dt_date
+from datetime import date 
 
 from ..schemas.player_schemas import PlayerResponse
 from ..schemas.season_schemas import SeasonResponsewoLeague
@@ -14,7 +14,7 @@ class TeamBase(BaseModel):
 
     @field_validator("founded_year")
     def validate_year(cls, value):
-        if value > dt_date.today().year:
+        if value > date.today().year:
             raise ValueError("Founded year cannot be in the future")
         return value
 
@@ -42,6 +42,9 @@ class TeamPlayers(BaseModel):
     jersey_number: int = Field(ge=1, le=99)
 
 
+class TeamPlayersUpdate(BaseModel):
+    jersey_number: Optional[int] = Field(default=None, ge=1, le=99)
+
 
 class TeamPlayersCreate(TeamPlayers):
     pass
@@ -54,8 +57,34 @@ class TeamPlayersResponse(TeamPlayers):
     season:SeasonResponsewoLeague
     class Config:
         from_attributes = True
+        
 
 class TeamPlayersLite(BaseModel):
     team: TeamNameResponse
     class Config:
         from_attributes = True
+
+class TeamCumulativeStatsQuery(BaseModel):
+    year: Optional[int] = None
+    league_name: Optional[str] = None  # e.g. "Champions League"
+    season_id: Optional[int] = None 
+    from_date: Optional[date] = None  # match date >= from_date
+    to_date: Optional[date] = None  # match date <= to_date
+
+class TeamUpdate(BaseModel):
+    name: Optional[str] = None
+    city: Optional[str] = None
+    founded_year: Optional[int] = None
+    stadium: Optional[str] = None
+
+
+class TeamCumulativeStatsResponse(BaseModel):
+    team_id: int
+    team_name: str
+    matches_played: int
+    wins: int
+    draws: int
+    losses: int
+    goals_scored: int
+    goals_conceded: int
+    points: int

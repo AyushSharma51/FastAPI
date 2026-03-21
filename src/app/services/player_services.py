@@ -1,8 +1,8 @@
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session, joinedload
-from ..schemas.player_schemas import PlayerCreate
-from ..db_models import Player as PlayerModel
+from ..schemas.player_schemas import PlayerCreate, PlayerMatchStatsUpdate, PlayerUpdate
+from ..db_models import Player as PlayerModel, TeamPlayer
 from ..db_models import PlayerMatchStat as PlayerMatchStatModel
 from ..schemas.player_schemas import PlayerMatchStatsCreate
 from ..db_models import League as LeagueModel
@@ -25,6 +25,80 @@ def create_a_player(db: Session, player: PlayerCreate):
     db.commit()
     db.refresh(player)
     return player
+
+def get_player_by_id(db: Session, player_id: int):
+    player = db.get(PlayerModel, player_id)
+
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    return player
+
+
+# PUT -------------------------------------------------------
+
+def update_player(db: Session, player_id: int, player: PlayerCreate):
+    db_player = db.get(PlayerModel, player_id)
+
+    if not db_player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    db_player.name = player.name
+    db_player.birth_date = player.birth_date
+    db_player.nationality = player.nationality
+
+    db.commit()
+    db.refresh(db_player)
+
+    return db_player
+
+# PATCH ----------------------------------------------------------------
+
+def patch_player(db: Session, player_id: int, player: PlayerUpdate):
+    db_player = db.get(PlayerModel, player_id)
+
+    if not db_player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    update_data = player.model_dump(exclude_unset=True)
+
+    for key, value in update_data.items():
+        setattr(db_player, key, value)
+
+    db.commit()
+    db.refresh(db_player)
+
+    return db_player
+
+# DELETE --------------------------------------------------------------------
+
+def delete_player(db: Session, player_id: int):
+    player = db.get(PlayerModel, player_id)
+
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    #  Check if player has match stats
+    has_stats = db.query(
+        exists().where(PlayerMatchStat.player_id == player_id)
+    ).scalar()
+
+    #  Check if player in team roster
+    has_team = db.query(
+        exists().where(TeamPlayer.player_id == player_id)
+    ).scalar()
+
+    if has_stats or has_team:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete player with existing records"
+        )
+
+    db.delete(player)
+    db.commit()
+
+    return {"message": "Player deleted successfully"}
+
 
 # Player-Match-Stats Services 
 #----------------------------------------------------------------------------------------------------------------------
@@ -101,4 +175,41 @@ def get_player_cumulative_stats(
         "total_minutes_played": result.total_minutes_played or 0,
         "matches_played": result.matches_played or 0,
     }
+
+def get_player_stat_by_id(db: Session, stat_id: int):
+    stat = db.get(PlayerMatchStatModel, stat_id)
+
+    if not stat:
+        raise HTTPException(status_code=404, detail="Player match stat not found")
+
+    return stat
+
+
+def update_player_stat(db: Session, stat_id: int, data: PlayerMatchStatsUpdate):
+    stat = db.get(PlayerMatchStatModel, stat_id)
+
+    if not stat:
+        raise HTTPException(status_code=404, detail="Player match stat not found")
+
+    update_data = data.model_dump(exclude_unset=True)
+
+    for key, value in update_data.items():
+        setattr(stat, key, value)
+
+    db.commit()
+    db.refresh(stat)
+
+    return stat
+
+
+def delete_player_stat(db: Session, stat_id: int):
+    stat = db.get(PlayerMatchStatModel, stat_id)
+
+    if not stat:
+        raise HTTPException(status_code=404, detail="Player match stat not found")
+
+    db.delete(stat)
+    db.commit()
+
+    return {"message": "Player stat deleted successfully"}
 

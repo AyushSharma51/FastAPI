@@ -61,7 +61,7 @@ def list_matches(
 
 @router.get(
     "/{match_id}",
-    response_model=MatchListResponse,
+    response_model=MatchResponse,
     response_model_exclude_none=True,
 )
 def get_match(

@@ -35,6 +35,11 @@ class PlayerResponse(Player):
     class Config:
         from_attributes = True
 
+class PlayerUpdate(BaseModel):
+    name: Optional[str] = None
+    birth_date: Optional[date] = None
+    nationality: Optional[str] = None
+
 
 # Player-Stats Schema
 
@@ -82,8 +87,12 @@ class PlayerMatchStatsCreate(PlayerMatchStats):
 class PlayerMatchStatsResponse(PlayerMatchStats):
     id: int
     player: PlayerLite
-    
-    
-
+ 
     class Config:
         from_attributes = True
+
+
+class PlayerMatchStatsUpdate(BaseModel):
+    goals: Optional[int] = Field(default=None, ge=0)
+    assists: Optional[int] = Field(default=None, ge=0)
+    minutes_played: Optional[int] = Field(default=None, ge=0, le=120)

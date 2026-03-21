@@ -8,7 +8,7 @@ from .routes.seasons import router as season_router
 from .routes.standings import router as standings_router
 from .routes.teams import router as teams_router
 
-app = FastAPI(title="Football League Management System")
+app = FastAPI(title="FOOTBALL LEAGUE MANAGEMENT SYSTEM")
 
 
 @app.on_event("startup")

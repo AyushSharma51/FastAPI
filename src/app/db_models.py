@@ -18,6 +18,7 @@ class League(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
+    is_deleted: Mapped[bool] = mapped_column(default=False)
 
     seasons: Mapped[list["Season"]] = relationship(back_populates="league")
 
@@ -146,6 +147,7 @@ class MatchParticipant(Base):
 
     match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"))
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
+    score: Mapped[int] = mapped_column(default=0)
 
     is_home: Mapped[bool] = mapped_column(Boolean)
   

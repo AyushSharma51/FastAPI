@@ -1,4 +1,5 @@
-from datetime import date as dt_date
+from datetime import date 
+from typing import Optional
 
 from pydantic import BaseModel, model_validator
 
@@ -9,8 +10,8 @@ class Season(BaseModel):
 
     league_id: int
     country: str
-    start_date: dt_date
-    end_date: dt_date
+    start_date: date
+    end_date: date
 
     @model_validator(mode="after")
     def validate_dates(self):
@@ -22,6 +23,11 @@ class Season(BaseModel):
 class SeasonCreate(Season):
     pass
 
+class SeasonUpdate(BaseModel):
+    league_id: Optional[int] = None
+    country: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
 
 class SeasonResponsewoLeague(Season):
     league: League
