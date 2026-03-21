@@ -2,7 +2,16 @@ from datetime import date
 from fastapi import HTTPException
 from sqlalchemy import case, exists, extract, func, select
 from sqlalchemy.orm import Session, joinedload
-from ..db_models import MatchParticipant, PlayerMatchStat, Team as TeamModel, Match , Season, League
+
+from ..schemas.common_schemas import PaginationParams
+from ..db_models import (
+    MatchParticipant,
+    PlayerMatchStat,
+    Team as TeamModel,
+    Match,
+    Season,
+    League,
+)
 from ..schemas.team_schemas import TeamCreate, TeamPlayersUpdate, TeamUpdate
 from ..db_models import TeamPlayer as TeamPlayerModel
 from ..schemas.team_schemas import TeamPlayersCreate
@@ -19,11 +28,17 @@ def create_team(db: Session, team: TeamCreate):
     db.refresh(team)
     return team
 
-
-def get_all_teams(db: Session):
+def get_all_teams(db: Session, pagination: PaginationParams, name=None):
     query = select(TeamModel)
-    teams = db.execute(query).scalars().all()
-    return teams
+
+    if name:
+        query = query.where(TeamModel.name.ilike(f"%{name}%"))
+
+    query = query.order_by(TeamModel.id)
+    query = query.offset(pagination.offset).limit(pagination.limit)
+
+    return db.execute(query).scalars().all()
+
 
 def get_team_by_id(db: Session, team_id: int):
     team = db.get(TeamModel, team_id)
@@ -32,6 +47,7 @@ def get_team_by_id(db: Session, team_id: int):
         raise HTTPException(status_code=404, detail="Team not found")
 
     return team
+
 
 def update_team(db: Session, team_id: int, team: TeamCreate):
     db_team = db.get(TeamModel, team_id)
@@ -48,6 +64,7 @@ def update_team(db: Session, team_id: int, team: TeamCreate):
     db.refresh(db_team)
 
     return db_team
+
 
 def patch_team(db: Session, team_id: int, team: TeamUpdate):
     db_team = db.get(TeamModel, team_id)
@@ -73,14 +90,11 @@ def delete_team(db: Session, team_id: int):
         raise HTTPException(status_code=404, detail="Team not found")
 
     # 🔍 Check if team used in matches
-    has_matches = db.query(
-        exists().where(MatchParticipant.team_id == team_id)
-    ).scalar()
+    has_matches = db.query(exists().where(MatchParticipant.team_id == team_id)).scalar()
 
     if has_matches:
         raise HTTPException(
-            status_code=400,
-            detail="Cannot delete team with match records"
+            status_code=400, detail="Cannot delete team with match records"
         )
 
     db.delete(team)
@@ -102,15 +116,18 @@ def create_team_players(db: Session, team_players: TeamPlayersCreate):
     return team_players
 
 
-def get_all_team_players(db: Session):
+def get_all_team_players(db: Session, pagination: PaginationParams):
     query = select(TeamPlayerModel).options(
         joinedload(TeamPlayerModel.team),
         joinedload(TeamPlayerModel.season),
         joinedload(TeamPlayerModel.player),
     )
 
-    team_players = db.execute(query).scalars().all()
-    return team_players
+    query = query.order_by(TeamPlayerModel.id)  
+    query = query.offset(pagination.offset).limit(pagination.limit)
+
+    return db.execute(query).scalars().all()
+
 
 def get_team_player_by_id(db: Session, team_player_id: int):
     tp = db.get(TeamPlayerModel, team_player_id)
@@ -138,7 +155,6 @@ def update_team_player(db: Session, team_player_id: int, data: TeamPlayersUpdate
     return tp
 
 
-
 def delete_team_player(db: Session, team_player_id: int):
     tp = db.get(TeamPlayerModel, team_player_id)
 
@@ -148,15 +164,15 @@ def delete_team_player(db: Session, team_player_id: int):
     # 🔍 Check if player has stats in matches
     has_stats = db.query(
         exists().where(
-            (PlayerMatchStat.player_id == tp.player_id) &
-            (PlayerMatchStat.team_id == tp.team_id)
+            (PlayerMatchStat.player_id == tp.player_id)
+            & (PlayerMatchStat.team_id == tp.team_id)
         )
     ).scalar()
 
     if has_stats:
         raise HTTPException(
             status_code=400,
-            detail="Cannot delete roster entry with existing match stats"
+            detail="Cannot delete roster entry with existing match stats",
         )
 
     db.delete(tp)
@@ -187,31 +203,26 @@ def get_team_cumulative_stats(
     query = (
         select(
             func.count(MatchParticipant.id).label("matches_played"),
-
             func.sum(
                 case(
                     (MatchParticipant.score > opponent.c.score, 1),
                     else_=0,
                 )
             ).label("wins"),
-
             func.sum(
                 case(
                     (MatchParticipant.score == opponent.c.score, 1),
                     else_=0,
                 )
             ).label("draws"),
-
             func.sum(
                 case(
                     (MatchParticipant.score < opponent.c.score, 1),
                     else_=0,
                 )
             ).label("losses"),
-
             func.sum(MatchParticipant.score).label("goals_scored"),
             func.sum(opponent.c.score).label("goals_conceded"),
-
             func.sum(
                 case(
                     (MatchParticipant.score > opponent.c.score, 3),
@@ -223,14 +234,12 @@ def get_team_cumulative_stats(
         .join(Match, Match.id == MatchParticipant.match_id)
         .join(Season, Season.id == Match.season_id)
         .join(League, League.id == Season.league_id)
-
         # self join to get opponent
         .join(
             opponent,
             (MatchParticipant.match_id == opponent.c.match_id)
             & (MatchParticipant.team_id != opponent.c.team_id),
         )
-
         .where(MatchParticipant.team_id == team_id)
     )
 

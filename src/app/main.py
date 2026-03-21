@@ -3,7 +3,9 @@ from fastapi import FastAPI
 from .database import create_tables
 from .routes.league import router as league_router
 from .routes.matches import router as matches_router
-from .routes.players import router as player_router
+from .routes.players import player_router
+from .routes.players import team_player_router
+from .routes.players import stats_router
 from .routes.seasons import router as season_router
 from .routes.standings import router as standings_router
 from .routes.teams import router as teams_router
@@ -20,6 +22,8 @@ app.include_router(league_router)
 app.include_router(season_router)
 app.include_router(teams_router)
 app.include_router(player_router)
+app.include_router(team_player_router)
+app.include_router(stats_router)
 app.include_router(matches_router)
 app.include_router(standings_router)
 

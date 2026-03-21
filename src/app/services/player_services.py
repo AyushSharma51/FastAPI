@@ -1,6 +1,8 @@
 from fastapi import HTTPException
 from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session, joinedload
+
+from ..schemas.common_schemas import PaginationParams
 from ..schemas.player_schemas import PlayerCreate, PlayerMatchStatsUpdate, PlayerUpdate
 from ..db_models import Player as PlayerModel, TeamPlayer
 from ..db_models import PlayerMatchStat as PlayerMatchStatModel
@@ -11,11 +13,19 @@ from ..db_models import PlayerMatchStat, Season
 
 
 # Player Services
-#-------------------------------------------------------------------------------------------------------------------
-def get_all_players(db: Session):
+# -------------------------------------------------------------------------------------------------------------------
+
+
+def get_all_players(db: Session, pagination: PaginationParams, name=None):
     query = select(PlayerModel)
-    player = db.execute(query).scalars().all()
-    return player
+
+    if name:
+        query = query.where(PlayerModel.name.ilike(f"%{name}%"))
+
+    query = query.order_by(PlayerModel.id)
+    query = query.offset(pagination.offset).limit(pagination.limit)
+
+    return db.execute(query).scalars().all()
 
 
 def create_a_player(db: Session, player: PlayerCreate):
@@ -25,6 +35,7 @@ def create_a_player(db: Session, player: PlayerCreate):
     db.commit()
     db.refresh(player)
     return player
+
 
 def get_player_by_id(db: Session, player_id: int):
     player = db.get(PlayerModel, player_id)
@@ -36,6 +47,7 @@ def get_player_by_id(db: Session, player_id: int):
 
 
 # PUT -------------------------------------------------------
+
 
 def update_player(db: Session, player_id: int, player: PlayerCreate):
     db_player = db.get(PlayerModel, player_id)
@@ -52,7 +64,9 @@ def update_player(db: Session, player_id: int, player: PlayerCreate):
 
     return db_player
 
+
 # PATCH ----------------------------------------------------------------
+
 
 def patch_player(db: Session, player_id: int, player: PlayerUpdate):
     db_player = db.get(PlayerModel, player_id)
@@ -70,7 +84,9 @@ def patch_player(db: Session, player_id: int, player: PlayerUpdate):
 
     return db_player
 
+
 # DELETE --------------------------------------------------------------------
+
 
 def delete_player(db: Session, player_id: int):
     player = db.get(PlayerModel, player_id)
@@ -84,14 +100,11 @@ def delete_player(db: Session, player_id: int):
     ).scalar()
 
     #  Check if player in team roster
-    has_team = db.query(
-        exists().where(TeamPlayer.player_id == player_id)
-    ).scalar()
+    has_team = db.query(exists().where(TeamPlayer.player_id == player_id)).scalar()
 
     if has_stats or has_team:
         raise HTTPException(
-            status_code=400,
-            detail="Cannot delete player with existing records"
+            status_code=400, detail="Cannot delete player with existing records"
         )
 
     db.delete(player)
@@ -100,8 +113,9 @@ def delete_player(db: Session, player_id: int):
     return {"message": "Player deleted successfully"}
 
 
-# Player-Match-Stats Services 
-#----------------------------------------------------------------------------------------------------------------------
+# Player-Match-Stats Services
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 def create_player_stats(db: Session, player_stats: PlayerMatchStatsCreate):
     player_stats = PlayerMatchStatModel(**player_stats.model_dump())
@@ -111,16 +125,22 @@ def create_player_stats(db: Session, player_stats: PlayerMatchStatsCreate):
     return player_stats
 
 
-def list_player_stats(db: Session):
+def list_player_stats(db: Session, pagination: PaginationParams):
     query = select(PlayerMatchStatModel).options(
         joinedload(PlayerMatchStatModel.match),
         joinedload(PlayerMatchStatModel.player),
-        joinedload(PlayerMatchStatModel.team),  # ✅ add this
+        joinedload(PlayerMatchStatModel.team),  
     )
-    return db.execute(query).scalars().all()
+    query = query.order_by(PlayerMatchStatModel.id)
+    query = query.offset(pagination.offset).limit(pagination.limit)
+
+    results = db.execute(query).scalars().all()
+    return results 
+
 
 # Player-Stats Services
-#------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------
+
 
 def get_player_cumulative_stats(
     db: Session,
@@ -176,6 +196,7 @@ def get_player_cumulative_stats(
         "matches_played": result.matches_played or 0,
     }
 
+
 def get_player_stat_by_id(db: Session, stat_id: int):
     stat = db.get(PlayerMatchStatModel, stat_id)
 
@@ -212,4 +233,3 @@ def delete_player_stat(db: Session, stat_id: int):
     db.commit()
 
     return {"message": "Player stat deleted successfully"}
-

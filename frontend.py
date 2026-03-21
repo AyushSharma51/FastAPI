@@ -6,7 +6,6 @@ import streamlit as st
 API_BASE_URL = "http://localhost:8000"
 st.set_page_config(page_title="FOOTBALL DASHBOARD", layout="wide")
 
-
 # ---------------- UI STYLE ----------------
 bg_overlay = "rgba(2,6,23,0.85)"
 text_color = "#f1f5f9"
@@ -14,8 +13,6 @@ card_bg = "rgba(17,24,39,0.85)"
 
 st.markdown(f"""
 <style>
-
-/* BACKGROUND */
 [data-testid="stAppViewContainer"] {{
     background: url("https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?q=80&w=1623&auto=format&fit=crop");
     background-size: cover;
@@ -23,7 +20,6 @@ st.markdown(f"""
     background-attachment: fixed;
 }}
 
-/* OVERLAY */
 [data-testid="stAppViewContainer"]::before {{
     content: "";
     position: fixed;
@@ -32,26 +28,23 @@ st.markdown(f"""
     z-index: 0;
 }}
 
-/* TEXT */
 html, body, [class*="css"] {{
     color: {text_color};
 }}
 
-/* CARD */
 .card {{
     background: {card_bg};
     padding: 20px;
     border-radius: 12px;
 }}
 
-/* CONTENT */
 .block-container {{
     position: relative;
     z-index: 1;
 }}
-
 </style>
 """, unsafe_allow_html=True)
+
 # ---------------- API ----------------
 @st.cache_data(ttl=60)
 def fetch(endpoint, params=None):
@@ -63,11 +56,11 @@ def fetch(endpoint, params=None):
         st.error(f"API Error: {e}")
         return None
 
-
 # ---------------- MATCH EXPLORER ----------------
 def render_match_explorer():
     st.title("MATCH EXPLORER")
 
+    # ✅ FIXED (use /league if backend not changed)
     leagues = fetch("/league")
     if not leagues:
         st.warning("No leagues found")
@@ -94,14 +87,13 @@ def render_match_explorer():
     selected_season = st.selectbox("Season", list(season_dict.keys()))
     season_id = season_dict[selected_season]
 
-    matches_data = fetch("/matches", {"season_id": season_id})
+    matches_data = fetch("/matches", {"season_id": season_id, "page": 1, "limit": 100})
     matches = matches_data.get("matches", []) if matches_data else []
 
     if not matches:
         st.info("No matches found")
         return
 
-    # METRICS
     c1, c2, c3 = st.columns(3)
     c1.metric("Total", len(matches))
     c2.metric("Completed", sum(m.get("status") == "completed" for m in matches))
@@ -109,7 +101,6 @@ def render_match_explorer():
 
     st.divider()
 
-    # FILTER
     search = st.text_input("Search Match")
 
     filtered = []
@@ -138,6 +129,7 @@ def render_match_explorer():
     render_match_details(match_dict[selected_match])
 
 
+# ---------------- MATCH DETAILS ----------------
 def render_match_details(match_id):
     match = fetch(f"/matches/{match_id}")
     if not match:
@@ -152,7 +144,7 @@ def render_match_details(match_id):
     home_name = home.get("team", {}).get("name", "Home")
     away_name = away.get("team", {}).get("name", "Away")
 
-    stats = fetch("/matches/players/stats") or []
+    stats = fetch("/matches/match-stats", {"page": 1, "limit": 100}) or []
     stats = [s for s in stats if s.get("match_id") == match_id]
 
     home_id = home.get("team", {}).get("id")
@@ -175,22 +167,31 @@ def render_match_details(match_id):
     c2.metric("Date", match.get("date"))
     c3.metric("Venue", match.get("venue"))
 
+    
     if stats:
-        df = pd.DataFrame(stats)
-        st.dataframe(df, use_container_width=True)
+        clean_data = []
+        for s in stats:
+            clean_data.append({
+                "player_name": s.get("player", {}).get("name"),
+                "team_name": s.get("team", {}).get("name"),
+                "goals": s.get("goals", 0),
+                "assists": s.get("assists", 0),
+                "minutes": s.get("minutes_played", 0),
+            })
 
+        df = pd.DataFrame(clean_data)
+        st.dataframe(df, use_container_width=True)
 
 # ---------------- PLAYERS ----------------
 def render_players():
     st.title("Players")
 
-    players = fetch("/players")
+    players = fetch("/players", {"page": 1, "limit": 100})
     if not players:
         st.warning("No players")
         return
 
     search = st.text_input("Search Player")
-
     players = [p for p in players if search.lower() in p["name"].lower()] if search else players
 
     player_dict = {p["name"]: p["id"] for p in players}
@@ -210,7 +211,7 @@ def render_players():
 def render_teams():
     st.title("Teams")
 
-    teams = fetch("/teams")
+    teams = fetch("/teams", {"page": 1, "limit": 100})
     if not teams:
         st.warning("No teams")
         return

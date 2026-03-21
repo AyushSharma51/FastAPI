@@ -32,7 +32,7 @@ def create_a_new_match(db: Session, matches: List[MatchCreate]):
         db.flush()  # flush so db_match.id is available for participants foriegn key, but don't commit yet
 
         # Create participants linked to the new match
-        if len(match.participants) < 2:
+        if len(match.participants) != 2:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Two teams are required")
         for p in match.participants:
             db_participant = MatchParticipantModel(
@@ -76,6 +76,8 @@ def get_all_matches(db, filters, date_range, sort_params, pagination):
         if sort_params.sort_order == "desc":
             sort_col = sort_col.desc()
         query = query.order_by(sort_col)
+    else:
+        query = query.order_by(MatchModel.id)
 
     # Pagination — LIMIT and OFFSET
     query = query.offset(pagination.offset).limit(pagination.limit)

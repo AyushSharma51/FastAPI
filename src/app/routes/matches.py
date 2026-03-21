@@ -33,13 +33,47 @@ from ..services.match_services import (
 from ..services.player_services import (
     create_player_stats,
     list_player_stats,
+    get_player_stat_by_id,
 )
 
 router = APIRouter(prefix="/matches", tags=["Matches"])
 
 
-# GET (LIST) -------------------------------------------------------------------
+# ================== PLAYER STATS (🔥 MOVED ABOVE) ==================
 
+@router.post(
+    "/match-stats",
+    response_model=PlayerMatchStatsResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_new_player_stats(
+    player_stats: PlayerMatchStatsCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    return create_player_stats(db, player_stats)
+
+
+@router.get("/match-stats")
+def list_match_player_stats(
+    db: Annotated[Session, Depends(get_db)],
+    pagination: Annotated[PaginationParams, Depends()],
+):
+    return list_player_stats(db, pagination)
+
+
+@router.get(
+    "/match-stats/{stat_id}",
+    response_model=PlayerMatchStatsResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_match_player_stat(
+    stat_id: Annotated[int, Path(ge=1, title="Stat ID")],
+    db: Annotated[Session, Depends(get_db)],
+):
+    return get_player_stat_by_id(db, stat_id)
+
+
+# ================== GET (LIST) ==================
 
 @router.get(
     "",
@@ -56,8 +90,7 @@ def list_matches(
     return get_all_matches(db, filters, date_range, sort_params, pagination)
 
 
-# GET (SINGLE) -----------------------------------------------------------------
-
+# ================== GET (SINGLE) ==================
 
 @router.get(
     "/{match_id}",
@@ -71,8 +104,7 @@ def get_match(
     return get_match_by_id(db, match_id)
 
 
-# POST (CREATE) ----------------------------------------------------------------
-
+# ================== POST (CREATE) ==================
 
 @router.post("", response_model=List[MatchResponse], status_code=status.HTTP_201_CREATED)
 def create_match(
@@ -82,8 +114,7 @@ def create_match(
     return create_a_new_match(db, matches)
 
 
-# PATCH (UPDATE) ---------------------------------------------------------------
-
+# ================== PATCH (UPDATE) ==================
 
 @router.patch(
     "/{match_id}",
@@ -98,8 +129,7 @@ def update_match(
     return update_a_match(db, match_id, update)
 
 
-# PUT (REPLACE) ----------------------------------------------------------------
-
+# ================== PUT (REPLACE) ==================
 
 @router.put(
     "/{match_id}",
@@ -114,8 +144,7 @@ def replace_match(
     return replace_a_match(db, match_id, match)
 
 
-# DELETE -----------------------------------------------------------------------
-
+# ================== DELETE ==================
 
 @router.delete(
     "/{match_id}",
@@ -127,30 +156,3 @@ def delete_match(
     db: Annotated[Session, Depends(get_db)],
 ):
     return delete_a_match(db, match_id)
-
-
-# PLAYER STATS -----------------------------------------------------------------
-
-
-@router.post(
-    "/players/stats",
-    response_model=PlayerMatchStatsResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_new_player_stats(
-    player_stats: PlayerMatchStatsCreate,
-    db: Annotated[Session, Depends(get_db)],
-):
-    return create_player_stats(db, player_stats)
-
-
-@router.get(
-    "/players/stats",
-    response_model=List[PlayerMatchStatsResponse],
-    response_model_exclude_none=True,
-    status_code=status.HTTP_200_OK,
-)
-def list_match_player_stats(
-    db: Annotated[Session, Depends(get_db)],
-):
-    return list_player_stats(db)
