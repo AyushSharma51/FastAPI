@@ -1,12 +1,13 @@
+from sqlite3 import IntegrityError
+
 from fastapi import HTTPException
 from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from ..schemas.common_schemas import PaginationParams
 from ..schemas.player_schemas import PlayerCreate, PlayerMatchStatsUpdate, PlayerUpdate
-from ..db_models import Player as PlayerModel, TeamPlayer
+from ..db_models import Player as PlayerModel, Team, TeamPlayer
 from ..db_models import PlayerMatchStat as PlayerMatchStatModel
-from ..schemas.player_schemas import PlayerMatchStatsCreate
 from ..db_models import League as LeagueModel
 from ..db_models import Match
 from ..db_models import PlayerMatchStat, Season
@@ -116,13 +117,30 @@ def delete_player(db: Session, player_id: int):
 # Player-Match-Stats Services
 # ----------------------------------------------------------------------------------------------------------------------
 
+def create_player_stats(db, data):
+    player = db.get(PlayerModel, data.player_id)
+    if not player:
+        raise HTTPException(404, "Player not found")
 
-def create_player_stats(db: Session, player_stats: PlayerMatchStatsCreate):
-    player_stats = PlayerMatchStatModel(**player_stats.model_dump())
-    db.add(player_stats)
-    db.commit()
-    db.refresh(player_stats)
-    return player_stats
+    match = db.get(Match, data.match_id)
+    if not match:
+        raise HTTPException(404, "Match not found")
+
+    team = db.get(Team, data.team_id)
+    if not team:
+        raise HTTPException(404, "Team not found")
+
+    stats = PlayerMatchStatModel(**data.model_dump())
+
+    try:
+        db.add(stats)
+        db.commit()
+        db.refresh(stats)
+        return stats
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "Invalid stats data")
 
 
 def list_player_stats(db: Session, pagination: PaginationParams):

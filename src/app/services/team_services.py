@@ -90,11 +90,15 @@ def delete_team(db: Session, team_id: int):
         raise HTTPException(status_code=404, detail="Team not found")
 
     # 🔍 Check if team used in matches
-    has_matches = db.query(exists().where(MatchParticipant.team_id == team_id)).scalar()
+
+    has_matches = db.query(MatchParticipant).filter(
+        MatchParticipant.team_id == team_id
+    ).first()
 
     if has_matches:
         raise HTTPException(
-            status_code=400, detail="Cannot delete team with match records"
+            status_code=400,
+            detail="Cannot delete team with existing matches"
         )
 
     db.delete(team)
@@ -108,6 +112,15 @@ def delete_team(db: Session, team_id: int):
 
 
 def create_team_players(db: Session, team_players: TeamPlayersCreate):
+
+    if not team_players.team_id:
+        raise HTTPException(404, "Team not found")
+
+    if not team_players.player_id:
+        raise HTTPException(404, "Player not found")
+
+    if not team_players.season_id:
+        raise HTTPException(404, "Season not found")
 
     team_players = TeamPlayerModel(**team_players.model_dump())
     db.add(team_players)
@@ -174,6 +187,7 @@ def delete_team_player(db: Session, team_player_id: int):
             status_code=400,
             detail="Cannot delete roster entry with existing match stats",
         )
+    
 
     db.delete(tp)
     db.commit()

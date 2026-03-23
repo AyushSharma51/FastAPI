@@ -1,6 +1,6 @@
 from typing import Annotated, List
 from ..services.season_services import delete_season, list_season, create_season, patch_season, update_season
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Path, status
 from sqlalchemy.orm import Session
 
 from src.app.database import get_db
@@ -21,7 +21,7 @@ def create_a_new_season(season: SeasonCreate, db: Annotated[Session, Depends(get
 
 @router.put("/{season_id}", response_model=SeasonResponse)
 def update_existing_season(
-    season_id: int,
+    season_id: Annotated[int, Path(ge=1)],
     season: SeasonCreate,
     db: Annotated[Session, Depends(get_db)],
 ):

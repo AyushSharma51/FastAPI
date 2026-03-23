@@ -83,7 +83,6 @@ def delete_season(db: Session, season_id: int):
     ).scalar()
 
     if has_matches:
-        #  Prevent delete
         raise HTTPException(
             status_code=400,
             detail="Cannot delete season with existing matches"

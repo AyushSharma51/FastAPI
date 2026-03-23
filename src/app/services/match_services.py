@@ -15,16 +15,24 @@ def create_a_new_match(db: Session, matches: List[MatchCreate]):
     results=[]
     for match in matches:
 
-        # Validate season exists
         season = db.get(SeasonModel, match.season_id)
         if not season:
-            raise HTTPException(status_code=404, detail="Season not found")
+            raise HTTPException(404, "Season not found")
 
-        # Validate both teams exist
+        if len(match.participants) != 2:
+            raise HTTPException(400, "Match must have exactly 2 participants")
+
+        team_ids = set()
+
         for p in match.participants:
             team = db.get(TeamModel, p.team_id)
             if not team:
-                raise HTTPException(status_code=404, detail=f"Team {p.team_id} not found")
+                raise HTTPException(404, "Team not found")
+
+            if p.team_id in team_ids:
+                raise HTTPException(400, "Duplicate teams not allowed")
+
+            team_ids.add(p.team_id)
 
         # Create the match — exclude participants, they're not a MatchModel field
         db_match = MatchModel(**match.model_dump(exclude={"participants"}))

@@ -1,8 +1,10 @@
+from sqlite3 import IntegrityError
+
 from fastapi import HTTPException, status
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
-from ..schemas.league_schemas import LeagueCreate
+# from ..schemas.league_schemas import LeagueCreate
 
 from ..db_models import League as LeagueModel, Season
 
@@ -15,33 +17,46 @@ def get_all_leagues(db: Session):
 
 #-------------------------------------CREATE A LEAGUE--------------------------------------------------------
 
-def create_league(db: Session, league: LeagueCreate):
-    """Create a new league"""
-    league = LeagueModel(**league.model_dump())
-    db.add(league)
-    db.commit()
-    db.refresh(league)
-    return league
+def create_league(db, league):
+    obj = LeagueModel(**league.model_dump())
+    db.add(obj)
+
+    try:
+        db.flush()   # 🔥 IMPORTANT (catches early)
+        db.commit()
+        db.refresh(obj)
+        return obj
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="name already exists"
+        )
 
 #--------------------------------------UPDATE A LEAGUE------------------------------------------------------------
 
 def league_update(db, league_id, league):
     db_league = db.get(LeagueModel, league_id)
-    if db_league is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="League not found"
-        )
 
-    # Only the fields the client explicitly sent
+    if not db_league:
+        raise HTTPException(404, "League not found")
+
     update_data = league.model_dump(exclude_unset=True)
 
     if "name" in update_data:
         db_league.name = update_data["name"]
 
-    db.commit()
-    db.refresh(db_league)
-    return db_league
+    try:
+        db.flush()   # 🔥 IMPORTANT
+        db.commit()
+        db.refresh(db_league)
+        return db_league
 
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "name already exists")
+    
 #---------------------------------------DELETE A LEAGUE----------------------------------------------------------
 
 def delete_league(db: Session, league_id: int):
