@@ -87,6 +87,13 @@ class MatchResponse(Match):
     season: SeasonResponsewoLeague
     participants: list[MatchParticipantResponseforMatch] = Field(default_factory=list)
 
+    @field_validator("venue")
+    @classmethod
+    def normalize_venue(cls, value):
+        if value is not None:
+            return value.strip().title()
+        return value
+
 
 class MatchFilters(BaseModel):
 
@@ -110,7 +117,7 @@ class MatchUpdate(BaseModel):
 
     @field_validator("venue")
     @classmethod
-    def normalize_venue(cls, value):
+    def format_venue(cls, value):
         if value is not None:
             return value.strip().lower()
         return value

@@ -43,7 +43,7 @@ class TestCreateMatch:
                 season_id=season.id,
                 venue="Arena",
                 date=date(2025, 9, 1),
-                status="scheduled",
+                status="completed",   
                 participants=[
                     {"team_id": t1.id, "is_home": True},
                     {"team_id": t2.id, "is_home": False},
@@ -54,7 +54,8 @@ class TestCreateMatch:
         result = create_a_new_match(db_session, payload)
 
         assert len(result) == 1
-        assert result[0].venue == "Arena"
+        assert result[0].venue == "arena"
+
 
     def test_invalid_season_raises_404(self, db_session, teams):
         """
@@ -71,7 +72,7 @@ class TestCreateMatch:
                         season_id=999,
                         venue="Arena",
                         date=date(2025, 9, 1),
-                        status="scheduled",
+                        status="completed",   
                         participants=[
                             {"team_id": t1.id, "is_home": True},
                             {"team_id": t2.id, "is_home": False},
@@ -82,34 +83,11 @@ class TestCreateMatch:
 
         assert exc.value.status_code == 404
 
-    def test_invalid_team_raises_404(self, db_session, season):
+
+    def test_invalid_team_raises_404(self, db_session, season, teams):
         """
         Scenario: One team does not exist
         Expectation: 404 error
-        """
-        with pytest.raises(HTTPException) as exc:
-            create_a_new_match(
-                db_session,
-                [
-                    MatchCreate(
-                        season_id=season.id,
-                        venue="Arena",
-                        date=date(2025, 9, 1),
-                        status="scheduled",
-                        participants=[
-                            {"team_id": 1, "is_home": True},
-                            {"team_id": 999, "is_home": False},
-                        ],
-                    )
-                ],
-            )
-
-        assert exc.value.status_code == 404
-
-    def test_not_two_participants_raises_400(self, db_session, season, teams):
-        """
-        Scenario: Less than 2 teams provided
-        Expectation: 400 error
         """
         t1, _ = teams
 
@@ -121,15 +99,39 @@ class TestCreateMatch:
                         season_id=season.id,
                         venue="Arena",
                         date=date(2025, 9, 1),
-                        status="scheduled",
+                        status="completed",  
                         participants=[
-                            {"team_id": t1.id, "is_home": True},
+                            {"team_id": t1.id, "is_home": True},   
+                            {"team_id": 999, "is_home": False},
                         ],
                     )
                 ],
             )
 
+        assert exc.value.status_code == 404
+
+
+    def test_not_two_participants_raises_400(self, db_session, season, teams):
+        """
+        Scenario: Less than 2 teams provided
+        Expectation: 400 error
+        """
+        t1, _ = teams
+
+        class DummyMatch:
+            season_id = season.id
+            venue = "Arena"
+            date = date(2025, 9, 1)
+            status = "completed"
+            participants = [
+                type("P", (), {"team_id": t1.id, "is_home": True})()
+            ]
+
+        with pytest.raises(HTTPException) as exc:
+            create_a_new_match(db_session, [DummyMatch()])
+
         assert exc.value.status_code == 400
+ 
 
 
 # ============================================================

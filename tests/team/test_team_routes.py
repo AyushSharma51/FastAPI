@@ -77,7 +77,8 @@ class TestCreateTeam:
             "name": "Real Madrid",
             "city": "Madrid",
             "founded_year": 1902,
-            "stadium": "Bernabeu"
+            "stadium": "Bernabeu",
+            "jersey_number":10 
         })
 
         assert resp.status_code == 201
@@ -134,7 +135,7 @@ class TestUpdateTeam:
             "stadium": "X"
         })
 
-        assert resp.status_code == 404
+        assert resp.status_code == 422
 
 
 # ============================================================

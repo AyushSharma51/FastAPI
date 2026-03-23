@@ -213,7 +213,13 @@ class TestDeleteSeason:
         If matches exist → deletion should be blocked.
         """
         # Create a dependent match
-        match = Match(season_id=season.id)
+        
+        match = Match(
+            season_id=season.id,
+            venue="test stadium",        
+            date=date(2025, 9, 1),       
+            status="completed"           
+        )
         db_session.add(match)
         db_session.commit()
 

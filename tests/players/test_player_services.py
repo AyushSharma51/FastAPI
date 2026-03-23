@@ -63,11 +63,11 @@ class TestPlayerCRUD:
         """
         result = create_a_player(
             db_session,
-            PlayerCreate(name="Ronaldo", birth_date=date(1985, 2, 5), nationality="Portugal"),
+            PlayerCreate(name="ronaldo", birth_date=date(1985, 2, 5), nationality="Portugal"),
         )
 
         assert result.id is not None
-        assert result.name == "Ronaldo"
+        assert result.name == "ronaldo"
 
     def test_get_all_players(self, db_session, player, pagination):
         """
@@ -103,10 +103,10 @@ class TestPlayerCRUD:
         result = update_player(
             db_session,
             player.id,
-            PlayerCreate(name="Neymar", birth_date=date(1992, 2, 5), nationality="Brazil"),
+            PlayerCreate(name="neymar", birth_date=date(1992, 2, 5), nationality="Brazil"),
         )
 
-        assert result.name == "Neymar"
+        assert result.name == "neymar"
 
     def test_patch_player(self, db_session, player):
         """
@@ -131,12 +131,22 @@ class TestPlayerCRUD:
         assert result["message"] == "Player deleted successfully"
         assert db_session.get(Player, player.id) is None
 
-    def test_delete_player_with_dependencies(self, db_session, player):
+    def test_delete_player_with_dependencies(self, db_session, player, match, teams):
         """
         Scenario: Player has stats or team
         Expectation: Deletion blocked (400)
         """
-        stat = PlayerMatchStat(player_id=player.id)
+        t1, _ = teams
+
+        stat = PlayerMatchStat(
+            player_id=player.id,
+            match_id=match.id,   
+            team_id=t1.id,       
+            goals=0,
+            assists=0,
+            minutes_played=10
+        )
+
         db_session.add(stat)
         db_session.commit()
 
@@ -152,7 +162,7 @@ class TestPlayerCRUD:
 
 class TestPlayerMatchStats:
 
-    def test_create_player_stats(self, db_session, player):
+    def test_create_player_stats(self, db_session, player, match, teams, pagination):
         """
         Scenario: Valid stats input
         Expectation: Stats created
@@ -172,12 +182,23 @@ class TestPlayerMatchStats:
         assert stat.id is not None
         assert stat.goals == 1
 
-    def test_list_player_stats(self, db_session, player, pagination):
+    def test_list_player_stats(self, db_session, player, match, teams, pagination):
         """
         Scenario: Stats exist
         Expectation: Should return list
         """
-        stat = PlayerMatchStat(player_id=player.id)
+        t1,_=teams
+        stat = create_player_stats(
+        db_session,
+        PlayerMatchStatsCreate(
+            player_id=player.id,
+            match_id=match.id,   
+            team_id=t1.id,       
+            goals=1,
+            assists=0,
+            minutes_played=90,
+        ),
+    )
         db_session.add(stat)
         db_session.commit()
 
@@ -185,24 +206,46 @@ class TestPlayerMatchStats:
 
         assert len(result) >= 1
 
-    def test_get_stat_by_id(self, db_session, player):
+    def test_get_stat_by_id(self, db_session, player, match, teams, pagination):
         """
         Scenario: Valid stat ID
         Expectation: Stat returned
         """
-        stat = PlayerMatchStat(player_id=player.id)
+        t1,_=teams
+        stat = create_player_stats(
+        db_session,
+        PlayerMatchStatsCreate(
+            player_id=player.id,
+            match_id=match.id,   
+            team_id=t1.id,       
+            goals=1,
+            assists=0,
+            minutes_played=90,
+        ),
+    )
         db_session.add(stat)
         db_session.commit()
 
         result = get_player_stat_by_id(db_session, stat.id)
         assert result.id == stat.id
 
-    def test_update_stat(self, db_session, player):
+    def test_update_stat(self, db_session, player, match, teams, pagination):
         """
         Scenario: Partial update of stat
         Expectation: Fields updated
         """
-        stat = PlayerMatchStat(player_id=player.id, goals=1)
+        t1,_=teams
+        stat = create_player_stats(
+        db_session,
+        PlayerMatchStatsCreate(
+            player_id=player.id,
+            match_id=match.id,   
+            team_id=t1.id,       
+            goals=1,
+            assists=0,
+            minutes_played=90,
+        ),
+    )
         db_session.add(stat)
         db_session.commit()
 
@@ -214,12 +257,23 @@ class TestPlayerMatchStats:
 
         assert result.goals == 5
 
-    def test_delete_stat(self, db_session, player):
+    def test_delete_stat(self, db_session, player, match, teams, pagination):
         """
         Scenario: Valid delete
         Expectation: Stat removed
         """
-        stat = PlayerMatchStat(player_id=player.id)
+        t1,_=teams
+        stat = create_player_stats(
+        db_session,
+        PlayerMatchStatsCreate(
+            player_id=player.id,
+            match_id=match.id,   
+            team_id=t1.id,       
+            goals=1,
+            assists=0,
+            minutes_played=90,
+        ),
+    )
         db_session.add(stat)
         db_session.commit()
 

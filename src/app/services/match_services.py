@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from ..db_models import Match as MatchModel
+from ..db_models import Match as MatchModel, MatchParticipant
 from ..db_models import MatchParticipant as MatchParticipantModel
 from ..db_models import Season as SeasonModel
 from ..db_models import Team as TeamModel
@@ -164,12 +164,18 @@ def replace_a_match(db, match_id, match):
 
 
 def delete_a_match(db, match_id):
-    db_match = db.get(MatchModel, match_id)
-    if db_match is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Match not found"
-        )
+    match = db.get(MatchModel, match_id)
 
-    db.delete(db_match)
+    if not match:
+        raise HTTPException(404, "Match not found")
+
+    #  delete participants FIRST
+    db.query(MatchParticipant).filter(
+        MatchParticipant.match_id == match_id
+    ).delete()
+
+    #  then delete match
+    db.delete(match)
     db.commit()
-    return db_match
+
+    return match
