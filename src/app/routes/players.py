@@ -37,11 +37,17 @@ from ..services.team_services import (
     update_team_player,
 )
 from ..schemas.common_schemas import PaginationParams
+from ..security.deps import RoleChecker
+from ..db_models import Role
+
 
 #  SEPARATE ROUTERS
 player_router = APIRouter(prefix="/players", tags=["Players"])
 team_player_router = APIRouter(prefix="/team-players", tags=["Team Players"])
 stats_router = APIRouter(prefix="/player-stats", tags=["Player Stats"])
+
+allow_admin = RoleChecker([Role.ADMIN])
+allow_admin_or_editor = RoleChecker([Role.ADMIN, Role.EDITOR])
 
 
 # ================== PLAYERS ==================
@@ -56,7 +62,12 @@ def list_all_players(
     return get_all_players(db, pagination, name)
 
 
-@player_router.post("", response_model=PlayerResponse, status_code=201)
+@player_router.post(
+    "",
+    response_model=PlayerResponse,
+    status_code=201,
+    dependencies=[Depends(allow_admin_or_editor)],
+)
 def create_a_new_player(
     player: PlayerCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -69,21 +80,31 @@ def get_single_player(player_id: int, db: Annotated[Session, Depends(get_db)]):
     return get_player_by_id(db, player_id)
 
 
-@player_router.put("/{player_id}", response_model=PlayerResponse)
+@player_router.put(
+    "/{player_id}",
+    response_model=PlayerResponse,
+    dependencies=[Depends(allow_admin_or_editor)],
+)
 def update_existing_player(
     player_id: int, player: PlayerCreate, db: Annotated[Session, Depends(get_db)]
 ):
     return update_player(db, player_id, player)
 
 
-@player_router.patch("/{player_id}", response_model=PlayerResponse)
+@player_router.patch(
+    "/{player_id}",
+    response_model=PlayerResponse,
+    dependencies=[Depends(allow_admin_or_editor)],
+)
 def patch_existing_player(
     player_id: int, player: PlayerUpdate, db: Annotated[Session, Depends(get_db)]
 ):
     return patch_player(db, player_id, player)
 
 
-@player_router.delete("/{player_id}", status_code=200)
+@player_router.delete(
+    "/{player_id}", status_code=200, dependencies=[Depends(allow_admin_or_editor)]
+)
 def delete_existing_player(player_id: int, db: Annotated[Session, Depends(get_db)]):
     return delete_player(db, player_id)
 
@@ -119,6 +140,7 @@ def get_cumulative_stats(
     "",
     response_model=TeamPlayersResponse,
     status_code=201,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
 def create_new_team_players(
     team_players: TeamPlayersCreate,
@@ -143,7 +165,11 @@ def get_single_team_player(
     return get_team_player_by_id(db, team_player_id)
 
 
-@team_player_router.patch("/{team_player_id}", response_model=TeamPlayersResponse)
+@team_player_router.patch(
+    "/{team_player_id}",
+    response_model=TeamPlayersResponse,
+    dependencies=[Depends(allow_admin_or_editor)],
+)
 def patch_team_player(
     team_player_id: int,
     data: TeamPlayersUpdate,
@@ -152,7 +178,9 @@ def patch_team_player(
     return update_team_player(db, team_player_id, data)
 
 
-@team_player_router.delete("/{team_player_id}", status_code=200)
+@team_player_router.delete(
+    "/{team_player_id}", status_code=200, dependencies=[Depends(allow_admin_or_editor)]
+)
 def delete_team_player_route(
     team_player_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -171,7 +199,11 @@ def get_single_player_stat(
     return get_player_stat_by_id(db, stat_id)
 
 
-@stats_router.patch("/{stat_id}", response_model=PlayerMatchStatsResponse)
+@stats_router.patch(
+    "/{stat_id}",
+    response_model=PlayerMatchStatsResponse,
+    dependencies=[Depends(allow_admin_or_editor)],
+)
 def patch_player_stat(
     stat_id: int,
     data: PlayerMatchStatsUpdate,
@@ -180,7 +212,9 @@ def patch_player_stat(
     return update_player_stat(db, stat_id, data)
 
 
-@stats_router.delete("/{stat_id}", status_code=200)
+@stats_router.delete(
+    "/{stat_id}", status_code=200, dependencies=[Depends(allow_admin_or_editor)]
+)
 def delete_player_stat_route(
     stat_id: int,
     db: Annotated[Session, Depends(get_db)],

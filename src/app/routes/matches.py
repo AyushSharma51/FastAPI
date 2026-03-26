@@ -35,16 +35,23 @@ from ..services.player_services import (
     list_player_stats,
     get_player_stat_by_id,
 )
+from ..security.deps import RoleChecker
+from ..db_models import Role
 
 router = APIRouter(prefix="/matches", tags=["Matches"])
 
+allow_admin = RoleChecker([Role.ADMIN])
+allow_admin_or_editor = RoleChecker([Role.ADMIN, Role.EDITOR])
 
-# ================== PLAYER STATS (🔥 MOVED ABOVE) ==================
+
+# ================== PLAYER STATS  ==================
+
 
 @router.post(
     "/match-stats",
     response_model=PlayerMatchStatsResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
 def create_new_player_stats(
     player_stats: PlayerMatchStatsCreate,
@@ -75,6 +82,7 @@ def get_match_player_stat(
 
 # ================== GET (LIST) ==================
 
+
 @router.get(
     "",
     response_model=MatchListResponse,
@@ -92,6 +100,7 @@ def list_matches(
 
 # ================== GET (SINGLE) ==================
 
+
 @router.get(
     "/{match_id}",
     response_model=MatchResponse,
@@ -106,7 +115,13 @@ def get_match(
 
 # ================== POST (CREATE) ==================
 
-@router.post("", response_model=List[MatchResponse], status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "",
+    response_model=List[MatchResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(allow_admin_or_editor)],
+)
 def create_match(
     matches: Annotated[List[MatchCreate], Body(openapi_examples=CREATE_MATCH_EXAMPLES)],
     db: Annotated[Session, Depends(get_db)],
@@ -116,10 +131,12 @@ def create_match(
 
 # ================== PATCH (UPDATE) ==================
 
+
 @router.patch(
     "/{match_id}",
     response_model=MatchResponse,
     response_model_exclude_none=True,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
 def update_match(
     match_id: Annotated[int, Path(ge=1, title="Match ID")],
@@ -131,10 +148,12 @@ def update_match(
 
 # ================== PUT (REPLACE) ==================
 
+
 @router.put(
     "/{match_id}",
     response_model=MatchResponse,
     response_model_exclude_none=True,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
 def replace_match(
     match_id: Annotated[int, Path(ge=1, title="Match ID")],
@@ -146,10 +165,12 @@ def replace_match(
 
 # ================== DELETE ==================
 
+
 @router.delete(
     "/{match_id}",
     response_model=MatchResponse,
     response_model_exclude_none=True,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
 def delete_match(
     match_id: Annotated[int, Path(ge=1, title="Match ID")],

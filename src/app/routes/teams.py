@@ -20,15 +20,22 @@ from ..services.team_services import (
     patch_team,
     update_team,
 )
+from ..security.deps import RoleChecker
+from ..db_models import Role
+
 
 # --------------------------------------------ROUTES----------------------------------------------------------------------
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 
+allow_admin = RoleChecker([Role.ADMIN])
+allow_admin_or_editor = RoleChecker([Role.ADMIN, Role.EDITOR])
+
 
 @router.get("/{team_id}", response_model=TeamResponse)
 def get_single_team(team_id: int, db: Annotated[Session, Depends(get_db)]):
     return get_team_by_id(db, team_id)
+
 
 @router.get("")
 def list_all_teams(
@@ -38,8 +45,14 @@ def list_all_teams(
 ):
     return get_all_teams(db, pagination, name)
 
+
 # ------------------------------------------POST(CREATE)-------------------------------------------------------------------
-@router.post("", response_model=TeamResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=TeamResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(allow_admin_or_editor)],
+)
 def create_new_team(team: TeamCreate, db: Annotated[Session, Depends(get_db)]):
     """Create a new team"""
     return create_team(db, team)
@@ -48,7 +61,11 @@ def create_new_team(team: TeamCreate, db: Annotated[Session, Depends(get_db)]):
 # --------------------------------------------PUT(REPLACE)------------------------------------------------------------------
 
 
-@router.put("/{team_id}", response_model=TeamResponse)
+@router.put(
+    "/{team_id}",
+    response_model=TeamResponse,
+    dependencies=[Depends(allow_admin_or_editor)],
+)
 def update_existing_team(
     team_id: int, team: TeamCreate, db: Annotated[Session, Depends(get_db)]
 ):
@@ -58,7 +75,11 @@ def update_existing_team(
 # ---------------------------------------------PATCH(UPDATE)-----------------------------------------------------------------
 
 
-@router.patch("/{team_id}", response_model=TeamResponse)
+@router.patch(
+    "/{team_id}",
+    response_model=TeamResponse,
+    dependencies=[Depends(allow_admin_or_editor)],
+)
 def patch_existing_team(
     team_id: int, team: TeamUpdate, db: Annotated[Session, Depends(get_db)]
 ):
@@ -68,7 +89,9 @@ def patch_existing_team(
 # -------------------------------------------------DELETE--------------------------------------------------------------------
 
 
-@router.delete("/{team_id}", status_code=200)
+@router.delete(
+    "/{team_id}", status_code=200, dependencies=[Depends(allow_admin_or_editor)]
+)
 def delete_existing_team(team_id: int, db: Annotated[Session, Depends(get_db)]):
     return delete_team(db, team_id)
 
@@ -82,6 +105,7 @@ def delete_existing_team(team_id: int, db: Annotated[Session, Depends(get_db)]):
     "/{team_id}/stats",
     response_model=TeamCumulativeStatsResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
 def get_cumulative_stats(
     team_id: int,

@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 # your package structure, e.g.:
 #   from app.db_models import ...
 # ---------------------------------------------------------------------------
+from .db_models import Role  # <-- Added
+from .db_models import User  # <-- Added
 from .db_models import (
     Base,
     League,
@@ -26,6 +28,9 @@ from .db_models import (
     Team,
     TeamPlayer,
 )
+
+# Import the password hasher from your auth module
+from .security.auth import get_password_hash  # <-- Added
 
 DATABASE_URL = "sqlite:///./matches.db"
 
@@ -42,14 +47,27 @@ def seed():
     with Session(engine) as session:
 
         # ------------------------------------------------------------------ #
-        # Guard – skip if data already exists                                  #
+        # Guard – skip if data already exists                                #
         # ------------------------------------------------------------------ #
         if session.query(League).first():
             print("Database already seeded – skipping.")
             return
 
         # ------------------------------------------------------------------ #
-        # Leagues                                                              #
+        # Seed Initial Admin User                                            #
+        # ------------------------------------------------------------------ #
+        admin_exists = session.query(User).filter(User.username == "admin").first()
+        if not admin_exists:
+            hashed_pwd = get_password_hash("admin123")
+            admin_user = User(
+                username="admin", hashed_password=hashed_pwd, role=Role.ADMIN
+            )
+            session.add(admin_user)
+            session.flush()
+            print("👤 Admin user created (Username: admin, Password: admin123)")
+
+        # ------------------------------------------------------------------ #
+        # Leagues                                                            #
         # ------------------------------------------------------------------ #
         premier_league = League(name="Premier League")
         la_liga = League(name="La Liga")
@@ -57,7 +75,7 @@ def seed():
         session.flush()  # assign IDs before referencing them
 
         # ------------------------------------------------------------------ #
-        # Seasons                                                              #
+        # Seasons                                                            #
         # ------------------------------------------------------------------ #
         pl_season = Season(
             league=premier_league,
@@ -75,7 +93,7 @@ def seed():
         session.flush()
 
         # ------------------------------------------------------------------ #
-        # Teams                                                                #
+        # Teams                                                              #
         # ------------------------------------------------------------------ #
         man_city = Team(
             name="Manchester City",
@@ -117,7 +135,7 @@ def seed():
         session.flush()
 
         # ------------------------------------------------------------------ #
-        # Players                                                              #
+        # Players                                                            #
         # ------------------------------------------------------------------ #
         # Premier League players
         haaland = Player(
@@ -183,7 +201,7 @@ def seed():
         session.flush()
 
         # ------------------------------------------------------------------ #
-        # Rosters (TeamPlayer)                                                 #
+        # Rosters (TeamPlayer)                                               #
         # ------------------------------------------------------------------ #
         pl_roster = [
             TeamPlayer(
@@ -223,7 +241,7 @@ def seed():
         session.flush()
 
         # ------------------------------------------------------------------ #
-        # Matches                                                              #
+        # Matches                                                            #
         # ------------------------------------------------------------------ #
         # --- Premier League ---
         match1 = Match(
@@ -268,7 +286,7 @@ def seed():
         session.flush()
 
         # ------------------------------------------------------------------ #
-        # Match Participants                                                   #
+        # Match Participants                                                 #
         # ------------------------------------------------------------------ #
         session.add_all(
             [
@@ -297,7 +315,7 @@ def seed():
         session.flush()
 
         # ------------------------------------------------------------------ #
-        # Player Match Stats (only finished matches)                          #
+        # Player Match Stats (only finished matches)                         #
         # ------------------------------------------------------------------ #
         session.add_all(
             [

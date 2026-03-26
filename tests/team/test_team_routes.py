@@ -78,7 +78,7 @@ class TestCreateTeam:
             "city": "Madrid",
             "founded_year": 1902,
             "stadium": "Bernabeu",
-            "jersey_number":10 
+            
         })
 
         assert resp.status_code == 201

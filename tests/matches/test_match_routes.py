@@ -17,8 +17,8 @@ class TestPlayerStatsRoutes:
 
         resp = client.post(f"{BASE}/match-stats", json={
             "player_id": player.id,
-            "match_id": match.id,   # ✅ FIX
-            "team_id": t1.id,       # ✅ FIX
+            "match_id": match.id,   
+            "team_id": t1.id,       
             "goals": 1,
             "assists": 0,
             "minutes_played": 90

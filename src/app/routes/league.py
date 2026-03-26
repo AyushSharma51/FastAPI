@@ -1,11 +1,24 @@
 from typing import Annotated, List
-from ..schemas.league_schemas import LeagueResponse, LeagueCreate, League
+
 from fastapi import APIRouter, Depends, Path, status
 from sqlalchemy.orm import Session
+
 from src.app.database import get_db
-from src.app.services.league_services import create_league, get_all_leagues, league_update, delete_league
+from src.app.services.league_services import (
+    create_league,
+    delete_league,
+    get_all_leagues,
+    league_update,
+)
+
+from ..db_models import Role
+from ..schemas.league_schemas import League, LeagueCreate, LeagueResponse
+from ..security.deps import RoleChecker
 
 router = APIRouter(prefix="/league", tags=["League"])
+
+allow_admin = RoleChecker([Role.ADMIN])
+allow_admin_or_editor = RoleChecker([Role.ADMIN, Role.EDITOR])
 
 
 @router.get(
@@ -18,10 +31,15 @@ def list_league(db: Annotated[Session, Depends(get_db)]):
     return get_all_leagues(db)
 
 
-@router.post("", response_model=LeagueResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=LeagueResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(allow_admin_or_editor)],
+)
 def create_a_new_league(league: LeagueCreate, db: Annotated[Session, Depends(get_db)]):
 
-    return create_league(db,league)
+    return create_league(db, league)
 
 
 # -----------------------------------------------PATCH-------------------------------------------------------------
@@ -31,6 +49,7 @@ def create_a_new_league(league: LeagueCreate, db: Annotated[Session, Depends(get
     "/{league_id}",
     response_model=LeagueResponse,
     response_model_exclude_none=True,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
 def update_league(
     league_id: Annotated[int, Path(ge=1, title="League ID")],
@@ -39,11 +58,17 @@ def update_league(
 ):
     return league_update(db, league_id, league)
 
-#------------------------------------------------DELETE--------------------------------------------------------------------
-@router.delete("/{league_id}", status_code=status.HTTP_200_OK)
+
+# ------------------------------------------------DELETE--------------------------------------------------------------------
+
+@router.delete(
+    "/{league_id}",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(allow_admin_or_editor)],
+)
 def delete_league_route(
     league_id: int,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
+    dependencies=[Depends(allow_admin_or_editor)],
 ):
     return delete_league(db, league_id)
-
