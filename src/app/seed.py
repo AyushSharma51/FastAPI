@@ -6,7 +6,9 @@ Standings are intentionally skipped as requested.
 """
 
 from datetime import date
+import os
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -32,11 +34,15 @@ from .db_models import (
 # Import the password hasher from your auth module
 from .security.auth import get_password_hash  # <-- Added
 
-DATABASE_URL = "sqlite:///./matches.db"
+load_dotenv()
+
+# Supabase provides a Connection String in your dashboard 
+# (Project Settings -> Database -> Connection string -> URI)
+# It usually looks like: postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False},
     echo=False,
 )
 

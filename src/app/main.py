@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     """
 
     # STARTUP
-    create_tables()
+    await create_tables()
 
     yield  # App starts handling requests here
 

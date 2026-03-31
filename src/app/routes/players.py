@@ -1,7 +1,8 @@
 from datetime import date
 from typing import Annotated, Optional
+
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..schemas.player_schemas import (
@@ -27,8 +28,8 @@ from ..services.player_services import (
     patch_player,
     update_player,
     update_player_stat,
+    get_player_cumulative_stats,
 )
-from ..services.player_services import get_player_cumulative_stats
 from ..services.team_services import (
     create_team_players,
     delete_team_player,
@@ -41,7 +42,7 @@ from ..security.deps import RoleChecker
 from ..db_models import Role
 
 
-#  SEPARATE ROUTERS
+# ROUTERS
 player_router = APIRouter(prefix="/players", tags=["Players"])
 team_player_router = APIRouter(prefix="/team-players", tags=["Team Players"])
 stats_router = APIRouter(prefix="/player-stats", tags=["Player Stats"])
@@ -52,14 +53,14 @@ allow_admin_or_editor = RoleChecker([Role.ADMIN, Role.EDITOR])
 
 # ================== PLAYERS ==================
 
-
 @player_router.get("")
-def list_all_players(
-    db: Annotated[Session, Depends(get_db)],
+async def list_all_players(
+    db: Annotated[AsyncSession, Depends(get_db)],
     pagination: Annotated[PaginationParams, Depends()],
     name: Optional[str] = None,
 ):
-    return get_all_players(db, pagination, name)
+    """Get all players with optional name filter."""
+    return await get_all_players(db, pagination, name)
 
 
 @player_router.post(
@@ -68,16 +69,21 @@ def list_all_players(
     status_code=201,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def create_a_new_player(
+async def create_a_new_player(
     player: PlayerCreate,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return create_a_player(db, player)
+    """Create a new player."""
+    return await create_a_player(db, player)
 
 
 @player_router.get("/{player_id}", response_model=PlayerResponse)
-def get_single_player(player_id: int, db: Annotated[Session, Depends(get_db)]):
-    return get_player_by_id(db, player_id)
+async def get_single_player(
+    player_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get player by ID."""
+    return await get_player_by_id(db, player_id)
 
 
 @player_router.put(
@@ -85,10 +91,13 @@ def get_single_player(player_id: int, db: Annotated[Session, Depends(get_db)]):
     response_model=PlayerResponse,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def update_existing_player(
-    player_id: int, player: PlayerCreate, db: Annotated[Session, Depends(get_db)]
+async def update_existing_player(
+    player_id: int,
+    player: PlayerCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return update_player(db, player_id, player)
+    """Replace player details."""
+    return await update_player(db, player_id, player)
 
 
 @player_router.patch(
@@ -96,33 +105,43 @@ def update_existing_player(
     response_model=PlayerResponse,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def patch_existing_player(
-    player_id: int, player: PlayerUpdate, db: Annotated[Session, Depends(get_db)]
+async def patch_existing_player(
+    player_id: int,
+    player: PlayerUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return patch_player(db, player_id, player)
+    """Partially update player."""
+    return await patch_player(db, player_id, player)
 
 
 @player_router.delete(
-    "/{player_id}", status_code=200, dependencies=[Depends(allow_admin_or_editor)]
+    "/{player_id}",
+    status_code=200,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
-def delete_existing_player(player_id: int, db: Annotated[Session, Depends(get_db)]):
-    return delete_player(db, player_id)
+async def delete_existing_player(
+    player_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Delete a player."""
+    return await delete_player(db, player_id)
 
 
 @player_router.get(
     "/{player_id}/stats",
     response_model=PlayerCumulativeStatsResponse,
 )
-def get_cumulative_stats(
+async def get_cumulative_stats(
     player_id: int,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     year: Optional[int] = Query(default=None),
     league_name: Optional[str] = Query(default=None),
     team_id: Optional[int] = Query(default=None),
     from_date: Optional[date] = Query(default=None),
     to_date: Optional[date] = Query(default=None),
 ):
-    return get_player_cumulative_stats(
+    """Get cumulative stats for a player with filters."""
+    return await get_player_cumulative_stats(
         db=db,
         player_id=player_id,
         year=year,
@@ -135,34 +154,36 @@ def get_cumulative_stats(
 
 # ================== TEAM PLAYERS ==================
 
-
 @team_player_router.post(
     "",
     response_model=TeamPlayersResponse,
     status_code=201,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def create_new_team_players(
+async def create_new_team_players(
     team_players: TeamPlayersCreate,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return create_team_players(db, team_players)
+    """Assign player to team."""
+    return await create_team_players(db, team_players)
 
 
 @team_player_router.get("")
-def list_all_team_players(
-    db: Annotated[Session, Depends(get_db)],
+async def list_all_team_players(
+    db: Annotated[AsyncSession, Depends(get_db)],
     pagination: Annotated[PaginationParams, Depends()],
 ):
-    return get_all_team_players(db, pagination)
+    """List all team-player relationships."""
+    return await get_all_team_players(db, pagination)
 
 
 @team_player_router.get("/{team_player_id}", response_model=TeamPlayersResponse)
-def get_single_team_player(
+async def get_single_team_player(
     team_player_id: int,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return get_team_player_by_id(db, team_player_id)
+    """Get team-player mapping by ID."""
+    return await get_team_player_by_id(db, team_player_id)
 
 
 @team_player_router.patch(
@@ -170,33 +191,37 @@ def get_single_team_player(
     response_model=TeamPlayersResponse,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def patch_team_player(
+async def patch_team_player(
     team_player_id: int,
     data: TeamPlayersUpdate,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return update_team_player(db, team_player_id, data)
+    """Update team-player mapping."""
+    return await update_team_player(db, team_player_id, data)
 
 
 @team_player_router.delete(
-    "/{team_player_id}", status_code=200, dependencies=[Depends(allow_admin_or_editor)]
+    "/{team_player_id}",
+    status_code=200,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
-def delete_team_player_route(
+async def delete_team_player_route(
     team_player_id: int,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return delete_team_player(db, team_player_id)
+    """Delete team-player mapping."""
+    return await delete_team_player(db, team_player_id)
 
 
 # ================== PLAYER STATS ==================
 
-
 @stats_router.get("/{stat_id}", response_model=PlayerMatchStatsResponse)
-def get_single_player_stat(
+async def get_single_player_stat(
     stat_id: int,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return get_player_stat_by_id(db, stat_id)
+    """Get player match stat by ID."""
+    return await get_player_stat_by_id(db, stat_id)
 
 
 @stats_router.patch(
@@ -204,19 +229,23 @@ def get_single_player_stat(
     response_model=PlayerMatchStatsResponse,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def patch_player_stat(
+async def patch_player_stat(
     stat_id: int,
     data: PlayerMatchStatsUpdate,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return update_player_stat(db, stat_id, data)
+    """Update player match stat."""
+    return await update_player_stat(db, stat_id, data)
 
 
 @stats_router.delete(
-    "/{stat_id}", status_code=200, dependencies=[Depends(allow_admin_or_editor)]
+    "/{stat_id}",
+    status_code=200,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
-def delete_player_stat_route(
+async def delete_player_stat_route(
     stat_id: int,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return delete_player_stat(db, stat_id)
+    """Delete player match stat."""
+    return await delete_player_stat(db, stat_id)

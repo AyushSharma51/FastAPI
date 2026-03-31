@@ -1,30 +1,43 @@
-from sqlalchemy import Engine, create_engine, event
-from sqlalchemy.orm import Session
+import os
+from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
 from .db_models import Base
 
-DATABASE_URL = "sqlite:///./matches.db"
+# Load environment variables
+load_dotenv()
 
-engine = create_engine(
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL not found in environment variables")
+
+#  IMPORTANT: ensure async driver
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgresql://", "postgresql+asyncpg://"
+    )
+
+# Async engine
+engine = create_async_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False},
     echo=True,
+    pool_pre_ping=True 
 )
 
-# Enable foreign key constraints for SQLite
-@event.listens_for(Engine, "connect")
-def enable_sqlite_foreign_keys(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+# Async session
+SessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
 
+# Create tables (async)
+async def create_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-def create_tables():
-    Base.metadata.create_all(engine)
-
-
-def get_db():
-    with Session(engine) as session:
-        yield session
-
-
-
+# Dependency
+async def get_db():
+    async with SessionLocal() as db:
+        yield db

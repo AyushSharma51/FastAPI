@@ -1,7 +1,7 @@
 from typing import Annotated, List
 
 from fastapi import APIRouter, Body, Depends, Path, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..examples.match_examples import (
@@ -44,8 +44,7 @@ allow_admin = RoleChecker([Role.ADMIN])
 allow_admin_or_editor = RoleChecker([Role.ADMIN, Role.EDITOR])
 
 
-# ================== PLAYER STATS  ==================
-
+# ================== PLAYER STATS ==================
 
 @router.post(
     "/match-stats",
@@ -53,19 +52,28 @@ allow_admin_or_editor = RoleChecker([Role.ADMIN, Role.EDITOR])
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def create_new_player_stats(
+async def create_new_player_stats(
     player_stats: PlayerMatchStatsCreate,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return create_player_stats(db, player_stats)
+    """
+    Create player match statistics.
+
+    Requires:
+    - ADMIN or EDITOR role
+    """
+    return await create_player_stats(db, player_stats)
 
 
 @router.get("/match-stats")
-def list_match_player_stats(
-    db: Annotated[Session, Depends(get_db)],
+async def list_match_player_stats(
+    db: Annotated[AsyncSession, Depends(get_db)],
     pagination: Annotated[PaginationParams, Depends()],
 ):
-    return list_player_stats(db, pagination)
+    """
+    Get paginated list of player match statistics.
+    """
+    return await list_player_stats(db, pagination)
 
 
 @router.get(
@@ -73,48 +81,54 @@ def list_match_player_stats(
     response_model=PlayerMatchStatsResponse,
     status_code=status.HTTP_200_OK,
 )
-def get_match_player_stat(
+async def get_match_player_stat(
     stat_id: Annotated[int, Path(ge=1, title="Stat ID")],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return get_player_stat_by_id(db, stat_id)
+    """
+    Get a specific player match stat by ID.
+    """
+    return await get_player_stat_by_id(db, stat_id)
 
 
 # ================== GET (LIST) ==================
-
 
 @router.get(
     "",
     response_model=MatchListResponse,
     response_model_exclude_none=True,
 )
-def list_matches(
+async def list_matches(
     filters: Annotated[MatchFilters, Depends()],
     date_range: Annotated[DateRangeFilters, Depends()],
     pagination: Annotated[PaginationParams, Depends()],
     sort_params: Annotated[SortParams, Depends()],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return get_all_matches(db, filters, date_range, sort_params, pagination)
+    """
+    Get list of matches with filtering, sorting, and pagination.
+    """
+    return await get_all_matches(db, filters, date_range, sort_params, pagination)
 
 
 # ================== GET (SINGLE) ==================
-
 
 @router.get(
     "/{match_id}",
     response_model=MatchResponse,
     response_model_exclude_none=True,
 )
-def get_match(
+async def get_match(
     match_id: Annotated[int, Path(ge=1, title="Match ID")],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return get_match_by_id(db, match_id)
+    """
+    Get match details by ID.
+    """
+    return await get_match_by_id(db, match_id)
 
 
 # ================== POST (CREATE) ==================
-
 
 @router.post(
     "",
@@ -122,15 +136,20 @@ def get_match(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def create_match(
+async def create_match(
     matches: Annotated[List[MatchCreate], Body(openapi_examples=CREATE_MATCH_EXAMPLES)],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return create_a_new_match(db, matches)
+    """
+    Create one or multiple matches.
+
+    Requires:
+    - ADMIN or EDITOR role
+    """
+    return await create_a_new_match(db, matches)
 
 
 # ================== PATCH (UPDATE) ==================
-
 
 @router.patch(
     "/{match_id}",
@@ -138,16 +157,21 @@ def create_match(
     response_model_exclude_none=True,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def update_match(
+async def update_match(
     match_id: Annotated[int, Path(ge=1, title="Match ID")],
     update: Annotated[MatchUpdate, Body(openapi_examples=PATCH_MATCH_EXAMPLES)],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return update_a_match(db, match_id, update)
+    """
+    Partially update a match.
+
+    Requires:
+    - ADMIN or EDITOR role
+    """
+    return await update_a_match(db, match_id, update)
 
 
 # ================== PUT (REPLACE) ==================
-
 
 @router.put(
     "/{match_id}",
@@ -155,16 +179,21 @@ def update_match(
     response_model_exclude_none=True,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def replace_match(
+async def replace_match(
     match_id: Annotated[int, Path(ge=1, title="Match ID")],
     match: Annotated[Match, Body(openapi_examples=PUT_MATCH_EXAMPLES)],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return replace_a_match(db, match_id, match)
+    """
+    Replace an entire match record.
+
+    Requires:
+    - ADMIN or EDITOR role
+    """
+    return await replace_a_match(db, match_id, match)
 
 
 # ================== DELETE ==================
-
 
 @router.delete(
     "/{match_id}",
@@ -172,8 +201,14 @@ def replace_match(
     response_model_exclude_none=True,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def delete_match(
+async def delete_match(
     match_id: Annotated[int, Path(ge=1, title="Match ID")],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return delete_a_match(db, match_id)
+    """
+    Delete a match.
+
+    Requires:
+    - ADMIN or EDITOR role
+    """
+    return await delete_a_match(db, match_id)

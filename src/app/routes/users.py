@@ -1,7 +1,8 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from src.app.database import get_db
 from src.app.db_models import Role, User
@@ -15,52 +16,104 @@ router = APIRouter(prefix="/users", tags=["Users"])
 allow_admin = RoleChecker([Role.ADMIN])
 
 
+# ================== REGISTER ==================
+
 @router.post(
-    "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED
 )
-def register_user(user_in: UserCreate, db: Session = Depends(get_db)):
-    """Public route: Creates a new user with the default 'VIEWER' role."""
-    user_exists = db.query(User).filter(User.username == user_in.username).first()
+async def register_user(
+    user_in: UserCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Public route: Create a new user with default VIEWER role.
+    """
+
+    # ❌ db.query → ✅ select
+    result = await db.execute(
+        select(User).where(User.username == user_in.username)
+    )
+    user_exists = result.scalar_one_or_none()
+
     if user_exists:
-        raise HTTPException(status_code=400, detail="Username already registered")
+        raise HTTPException(
+            status_code=400,
+            detail="Username already registered"
+        )
 
     hashed_pwd = get_password_hash(user_in.password)
-    # The first user created should probably be an admin for setup purposes,
-    # but normally we default to VIEWER. Let's default to VIEWER.
+
     new_user = User(
-        username=user_in.username, hashed_password=hashed_pwd, role=Role.VIEWER
+        username=user_in.username,
+        hashed_password=hashed_pwd,
+        role=Role.VIEWER
     )
 
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
     return new_user
 
 
-@router.get("/", response_model=List[UserResponse], dependencies=[Depends(allow_admin)])
-def list_users(db: Session = Depends(get_db)):
-    """Admin only: List all registered users."""
-    return db.query(User).all()
+# ================== LIST USERS ==================
 
+@router.get(
+    "/",
+    response_model=List[UserResponse],
+    dependencies=[Depends(allow_admin)]
+)
+async def list_users(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Admin only: List all users.
+    """
+    result = await db.execute(select(User))
+    return result.scalars().all()
+
+
+# ================== ASSIGN ROLE ==================
 
 @router.patch(
-    "/{user_id}/role", response_model=UserResponse, dependencies=[Depends(allow_admin)]
+    "/{user_id}/role",
+    response_model=UserResponse,
+    dependencies=[Depends(allow_admin)]
 )
-def assign_role(
-    user_id: int, role_update: UserRoleUpdate, db: Session = Depends(get_db)
+async def assign_role(
+    user_id: int,
+    role_update: UserRoleUpdate,
+    db: AsyncSession = Depends(get_db)
 ):
-    """Admin only: Change a user's role."""
-    user = db.get(User, user_id)
+    """
+    Admin only: Update user role.
+    """
+
+    user = await db.get(User, user_id)
+
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
 
     user.role = role_update.role
-    db.commit()
-    db.refresh(user)
+
+    await db.commit()
+    await db.refresh(user)
+
     return user
 
 
+# ================== CURRENT USER ==================
+
 @router.get("/me", response_model=UserResponse)
-def read_users_me(current_user: User = Depends(get_current_user)):
-    """Get the profile and role of the currently logged-in user."""
+async def read_users_me(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get current logged-in user's profile.
+    """
     return current_user

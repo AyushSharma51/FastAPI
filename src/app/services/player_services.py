@@ -1,23 +1,20 @@
-from sqlite3 import IntegrityError
-
 from fastapi import HTTPException
 from sqlalchemy import exists, func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
+from sqlalchemy.exc import IntegrityError
 
 from ..schemas.common_schemas import PaginationParams
 from ..schemas.player_schemas import PlayerCreate, PlayerMatchStatsUpdate, PlayerUpdate
 from ..db_models import Player as PlayerModel, Team, TeamPlayer
 from ..db_models import PlayerMatchStat as PlayerMatchStatModel
 from ..db_models import League as LeagueModel
-from ..db_models import Match
-from ..db_models import PlayerMatchStat, Season
+from ..db_models import Match, PlayerMatchStat, Season
 
 
-# Player Services
-# -------------------------------------------------------------------------------------------------------------------
+# ------------------------------------ PLAYERS ------------------------------------
 
-
-def get_all_players(db: Session, pagination: PaginationParams, name=None):
+async def get_all_players(db: AsyncSession, pagination: PaginationParams, name=None):
     query = select(PlayerModel)
 
     if name:
@@ -26,20 +23,20 @@ def get_all_players(db: Session, pagination: PaginationParams, name=None):
     query = query.order_by(PlayerModel.id)
     query = query.offset(pagination.offset).limit(pagination.limit)
 
-    return db.execute(query).scalars().all()
+    result = await db.execute(query)
+    return result.scalars().all()
 
 
-def create_a_player(db: Session, player: PlayerCreate):
-    """Create a new player"""
-    player = PlayerModel(**player.model_dump())
-    db.add(player)
-    db.commit()
-    db.refresh(player)
-    return player
+async def create_a_player(db: AsyncSession, player: PlayerCreate):
+    db_player = PlayerModel(**player.model_dump())
+    db.add(db_player)
+    await db.commit()
+    await db.refresh(db_player)
+    return db_player
 
 
-def get_player_by_id(db: Session, player_id: int):
-    player = db.get(PlayerModel, player_id)
+async def get_player_by_id(db: AsyncSession, player_id: int):
+    player = await db.get(PlayerModel, player_id)
 
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
@@ -47,11 +44,10 @@ def get_player_by_id(db: Session, player_id: int):
     return player
 
 
-# PUT -------------------------------------------------------
+# ------------------------------------ UPDATE ------------------------------------
 
-
-def update_player(db: Session, player_id: int, player: PlayerCreate):
-    db_player = db.get(PlayerModel, player_id)
+async def update_player(db: AsyncSession, player_id: int, player: PlayerCreate):
+    db_player = await db.get(PlayerModel, player_id)
 
     if not db_player:
         raise HTTPException(status_code=404, detail="Player not found")
@@ -60,17 +56,14 @@ def update_player(db: Session, player_id: int, player: PlayerCreate):
     db_player.birth_date = player.birth_date
     db_player.nationality = player.nationality
 
-    db.commit()
-    db.refresh(db_player)
+    await db.commit()
+    await db.refresh(db_player)
 
     return db_player
 
 
-# PATCH ----------------------------------------------------------------
-
-
-def patch_player(db: Session, player_id: int, player: PlayerUpdate):
-    db_player = db.get(PlayerModel, player_id)
+async def patch_player(db: AsyncSession, player_id: int, player: PlayerUpdate):
+    db_player = await db.get(PlayerModel, player_id)
 
     if not db_player:
         raise HTTPException(status_code=404, detail="Player not found")
@@ -80,53 +73,56 @@ def patch_player(db: Session, player_id: int, player: PlayerUpdate):
     for key, value in update_data.items():
         setattr(db_player, key, value)
 
-    db.commit()
-    db.refresh(db_player)
+    await db.commit()
+    await db.refresh(db_player)
 
     return db_player
 
 
-# DELETE --------------------------------------------------------------------
+# ------------------------------------ DELETE ------------------------------------
 
-
-def delete_player(db: Session, player_id: int):
-    player = db.get(PlayerModel, player_id)
+async def delete_player(db: AsyncSession, player_id: int):
+    player = await db.get(PlayerModel, player_id)
 
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
 
-    #  Check if player has match stats
-    has_stats = db.query(
-        exists().where(PlayerMatchStat.player_id == player_id)
-    ).scalar()
+    # check stats
+    result = await db.execute(
+        select(exists().where(PlayerMatchStat.player_id == player_id))
+    )
+    has_stats = result.scalar()
 
-    #  Check if player in team roster
-    has_team = db.query(exists().where(TeamPlayer.player_id == player_id)).scalar()
+    # check team
+    result = await db.execute(
+        select(exists().where(TeamPlayer.player_id == player_id))
+    )
+    has_team = result.scalar()
 
     if has_stats or has_team:
         raise HTTPException(
-            status_code=400, detail="Cannot delete player with existing records"
+            status_code=400,
+            detail="Cannot delete player with existing records"
         )
 
-    db.delete(player)
-    db.commit()
+    await db.delete(player)
+    await db.commit()
 
     return {"message": "Player deleted successfully"}
 
 
-# Player-Match-Stats Services
-# ----------------------------------------------------------------------------------------------------------------------
+# ------------------------------------ PLAYER STATS ------------------------------------
 
-def create_player_stats(db, data):
-    player = db.get(PlayerModel, data.player_id)
+async def create_player_stats(db: AsyncSession, data):
+    player = await db.get(PlayerModel, data.player_id)
     if not player:
         raise HTTPException(404, "Player not found")
 
-    match = db.get(Match, data.match_id)
+    match = await db.get(Match, data.match_id)
     if not match:
         raise HTTPException(404, "Match not found")
 
-    team = db.get(Team, data.team_id)
+    team = await db.get(Team, data.team_id)
     if not team:
         raise HTTPException(404, "Team not found")
 
@@ -134,34 +130,35 @@ def create_player_stats(db, data):
 
     try:
         db.add(stats)
-        db.commit()
-        db.refresh(stats)
+        await db.commit()
+        await db.refresh(stats)
         return stats
 
     except IntegrityError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(400, "Invalid stats data")
 
 
-def list_player_stats(db: Session, pagination: PaginationParams):
+async def list_player_stats(db: AsyncSession, pagination: PaginationParams):
     query = select(PlayerMatchStatModel).options(
         joinedload(PlayerMatchStatModel.match),
         joinedload(PlayerMatchStatModel.player),
-        joinedload(PlayerMatchStatModel.team),  
+        joinedload(PlayerMatchStatModel.team),
     )
+
     query = query.order_by(PlayerMatchStatModel.id)
     query = query.offset(pagination.offset).limit(pagination.limit)
 
-    results = db.execute(query).scalars().all()
-    return results 
+    result = await db.execute(query)
+
+    # ✅ FIX: required when using joinedload
+    return result.scalars().unique().all()
 
 
-# Player-Stats Services
-# ------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------ CUMULATIVE STATS ------------------------------------
 
-
-def get_player_cumulative_stats(
-    db: Session,
+async def get_player_cumulative_stats(
+    db: AsyncSession,
     player_id: int,
     year: int | None = None,
     league_name: str | None = None,
@@ -169,9 +166,10 @@ def get_player_cumulative_stats(
     from_date=None,
     to_date=None,
 ):
-    player = db.execute(
+    player_result = await db.execute(
         select(PlayerModel).where(PlayerModel.id == player_id)
-    ).scalar_one_or_none()
+    )
+    player = player_result.scalar_one_or_none()
 
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
@@ -190,7 +188,7 @@ def get_player_cumulative_stats(
     )
 
     if year is not None:
-        query = query.where(func.strftime("%Y", Season.start_date) == str(year))
+        query = query.where(func.extract("year", Season.start_date) == year)
 
     if league_name is not None:
         query = query.where(LeagueModel.name == league_name)
@@ -203,20 +201,33 @@ def get_player_cumulative_stats(
     if team_id is not None:
         query = query.where(PlayerMatchStat.team_id == team_id)
 
-    result = db.execute(query).one()
+    result = await db.execute(query)
+    stats = result.one()
 
     return {
         "player_id": player.id,
         "player_name": player.name,
-        "total_goals": result.total_goals or 0,
-        "total_assists": result.total_assists or 0,
-        "total_minutes_played": result.total_minutes_played or 0,
-        "matches_played": result.matches_played or 0,
+        "total_goals": stats.total_goals or 0,
+        "total_assists": stats.total_assists or 0,
+        "total_minutes_played": stats.total_minutes_played or 0,
+        "matches_played": stats.matches_played or 0,
     }
 
 
-def get_player_stat_by_id(db: Session, stat_id: int):
-    stat = db.get(PlayerMatchStatModel, stat_id)
+# ------------------------------------ SINGLE STAT ------------------------------------
+
+async def get_player_stat_by_id(db: AsyncSession, stat_id: int):
+    result = await db.execute(
+        select(PlayerMatchStatModel)
+        .options(
+            joinedload(PlayerMatchStatModel.player),
+            joinedload(PlayerMatchStatModel.match),
+            joinedload(PlayerMatchStatModel.team),
+        )
+        .where(PlayerMatchStatModel.id == stat_id)
+    )
+
+    stat = result.unique().scalar_one_or_none()
 
     if not stat:
         raise HTTPException(status_code=404, detail="Player match stat not found")
@@ -224,8 +235,18 @@ def get_player_stat_by_id(db: Session, stat_id: int):
     return stat
 
 
-def update_player_stat(db: Session, stat_id: int, data: PlayerMatchStatsUpdate):
-    stat = db.get(PlayerMatchStatModel, stat_id)
+async def update_player_stat(db: AsyncSession, stat_id: int, data: PlayerMatchStatsUpdate):
+    result = await db.execute(
+        select(PlayerMatchStatModel)
+        .options(
+            joinedload(PlayerMatchStatModel.player),
+            joinedload(PlayerMatchStatModel.match),
+            joinedload(PlayerMatchStatModel.team),
+        )
+        .where(PlayerMatchStatModel.id == stat_id)
+    )
+
+    stat = result.unique().scalar_one_or_none()
 
     if not stat:
         raise HTTPException(status_code=404, detail="Player match stat not found")
@@ -235,19 +256,19 @@ def update_player_stat(db: Session, stat_id: int, data: PlayerMatchStatsUpdate):
     for key, value in update_data.items():
         setattr(stat, key, value)
 
-    db.commit()
-    db.refresh(stat)
+    await db.commit()
+    await db.refresh(stat)
 
     return stat
 
 
-def delete_player_stat(db: Session, stat_id: int):
-    stat = db.get(PlayerMatchStatModel, stat_id)
+async def delete_player_stat(db: AsyncSession, stat_id: int):
+    stat = await db.get(PlayerMatchStatModel, stat_id)
 
     if not stat:
         raise HTTPException(status_code=404, detail="Player match stat not found")
 
-    db.delete(stat)
-    db.commit()
+    await db.delete(stat)
+    await db.commit()
 
     return {"message": "Player stat deleted successfully"}

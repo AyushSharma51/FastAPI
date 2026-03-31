@@ -1,5 +1,5 @@
 """
-standings.py  –  FastAPI router for league standings.
+standings.py  –  FastAPI router for league standings (ASYNC VERSION).
 
 Mount in main.py:
     from .routes.standings import router as standings_router
@@ -9,7 +9,7 @@ Mount in main.py:
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..schemas.standings_schemas import StandingsResponse
@@ -17,6 +17,8 @@ from ..services.standings_services import StandingsFilters, get_standings
 
 router = APIRouter(prefix="/standings", tags=["Standings"])
 
+
+# ---------------------- FILTER BUILDER ----------------------
 
 def standings_filters(
     league_id: Optional[int] = Query(
@@ -55,7 +57,6 @@ def standings_filters(
 # GET /standings
 # ---------------------------------------------------------------------------
 
-
 @router.get(
     "",
     response_model=List[StandingsResponse],
@@ -69,7 +70,6 @@ Returns standings grouped by season, calculated live from completed match data.
 **Filtering options**
 - `league_id` — restrict to all seasons of a league
 - `season_id` — restrict to a single season
-- `min_wins / min_draws / min_losses / min_points` — threshold filters
 
 **Sorting**
 - `sort_by`: `points` (default), `wins`, `draws`, `losses`, `goal_difference`, `goals_for`, `played`
@@ -78,8 +78,11 @@ Returns standings grouped by season, calculated live from completed match data.
 Only matches with scores recorded for both teams are counted.
     """,
 )
-def list_standings(
+async def list_standings(
     filters: Annotated[StandingsFilters, Depends(standings_filters)],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> List[StandingsResponse]:
-    return get_standings(db, filters)
+    """
+    Fetch league standings with filters and sorting.
+    """
+    return await get_standings(db, filters)

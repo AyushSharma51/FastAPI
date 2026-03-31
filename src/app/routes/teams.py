@@ -1,7 +1,8 @@
 from typing import Annotated, Optional
-from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.orm import Session
 from datetime import date
+
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..schemas.common_schemas import PaginationParams
 from ..database import get_db
@@ -24,7 +25,7 @@ from ..security.deps import RoleChecker
 from ..db_models import Role
 
 
-# --------------------------------------------ROUTES----------------------------------------------------------------------
+# -------------------------------------------- ROUTES --------------------------------------------
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 
@@ -32,74 +33,93 @@ allow_admin = RoleChecker([Role.ADMIN])
 allow_admin_or_editor = RoleChecker([Role.ADMIN, Role.EDITOR])
 
 
-@router.get("/{team_id}", response_model=TeamResponse)
-def get_single_team(team_id: int, db: Annotated[Session, Depends(get_db)]):
-    return get_team_by_id(db, team_id)
+# ================== GET SINGLE ==================
 
+@router.get("/{team_id}", response_model=TeamResponse)
+async def get_single_team(
+    team_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)]
+):
+    """Get team by ID."""
+    return await get_team_by_id(db, team_id)
+
+
+# ================== GET ALL ==================
 
 @router.get("")
-def list_all_teams(
-    db: Annotated[Session, Depends(get_db)],
-    pagination: Annotated[PaginationParams, Depends()],  # ✅ ADD
+async def list_all_teams(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    pagination: Annotated[PaginationParams, Depends()],
     name: Optional[str] = None,
 ):
-    return get_all_teams(db, pagination, name)
+    """List all teams with optional name filter."""
+    return await get_all_teams(db, pagination, name)
 
 
-# ------------------------------------------POST(CREATE)-------------------------------------------------------------------
+# ================== CREATE ==================
+
 @router.post(
     "",
     response_model=TeamResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def create_new_team(team: TeamCreate, db: Annotated[Session, Depends(get_db)]):
-    """Create a new team"""
-    return create_team(db, team)
+async def create_new_team(
+    team: TeamCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Create a new team (Admin/Editor only)."""
+    return await create_team(db, team)
 
 
-# --------------------------------------------PUT(REPLACE)------------------------------------------------------------------
-
+# ================== PUT (REPLACE) ==================
 
 @router.put(
     "/{team_id}",
     response_model=TeamResponse,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def update_existing_team(
-    team_id: int, team: TeamCreate, db: Annotated[Session, Depends(get_db)]
+async def update_existing_team(
+    team_id: int,
+    team: TeamCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return update_team(db, team_id, team)
+    """Replace team details completely."""
+    return await update_team(db, team_id, team)
 
 
-# ---------------------------------------------PATCH(UPDATE)-----------------------------------------------------------------
-
+# ================== PATCH ==================
 
 @router.patch(
     "/{team_id}",
     response_model=TeamResponse,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def patch_existing_team(
-    team_id: int, team: TeamUpdate, db: Annotated[Session, Depends(get_db)]
+async def patch_existing_team(
+    team_id: int,
+    team: TeamUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return patch_team(db, team_id, team)
+    """Partially update team."""
+    return await patch_team(db, team_id, team)
 
 
-# -------------------------------------------------DELETE--------------------------------------------------------------------
-
+# ================== DELETE ==================
 
 @router.delete(
-    "/{team_id}", status_code=200, dependencies=[Depends(allow_admin_or_editor)]
+    "/{team_id}",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
-def delete_existing_team(team_id: int, db: Annotated[Session, Depends(get_db)]):
-    return delete_team(db, team_id)
+async def delete_existing_team(
+    team_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Delete a team."""
+    return await delete_team(db, team_id)
 
 
-# ---------------------------------------------------------------------------------------------------------------------------
-# -----------------------------------------Team Cumulative Stats-------------------------------------------------------------
-# ----------------------------------------------------------------------------------------------------------------------------
-
+# ================== TEAM CUMULATIVE STATS ==================
 
 @router.get(
     "/{team_id}/stats",
@@ -107,16 +127,19 @@ def delete_existing_team(team_id: int, db: Annotated[Session, Depends(get_db)]):
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def get_cumulative_stats(
+async def get_cumulative_stats(
     team_id: int,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     year: Optional[int] = Query(default=None),
     league_name: Optional[str] = Query(default=None),
     season_id: Optional[int] = Query(default=None),
     from_date: Optional[date] = Query(default=None),
     to_date: Optional[date] = Query(default=None),
 ):
-    return get_team_cumulative_stats(
+    """
+    Get cumulative stats for a team with filters.
+    """
+    return await get_team_cumulative_stats(
         db=db,
         team_id=team_id,
         year=year,

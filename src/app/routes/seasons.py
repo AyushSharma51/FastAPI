@@ -1,4 +1,9 @@
 from typing import Annotated, List
+
+from fastapi import APIRouter, Depends, Path, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.app.database import get_db
 from ..services.season_services import (
     delete_season,
     list_season,
@@ -6,9 +11,6 @@ from ..services.season_services import (
     patch_season,
     update_season,
 )
-from fastapi import APIRouter, Depends, Path, status
-from sqlalchemy.orm import Session
-from src.app.database import get_db
 from ..schemas.season_schemas import SeasonResponse, SeasonCreate, SeasonUpdate
 from ..security.deps import RoleChecker
 from ..db_models import Role
@@ -20,15 +22,24 @@ allow_admin = RoleChecker([Role.ADMIN])
 allow_admin_or_editor = RoleChecker([Role.ADMIN, Role.EDITOR])
 
 
+# ================== GET ALL ==================
+
 @router.get(
     "",
     response_model=List[SeasonResponse],
     response_model_exclude_none=True,
     status_code=status.HTTP_200_OK,
 )
-def list_all_seasons(db: Annotated[Session, Depends(get_db)]):
-    return list_season(db)
+async def list_all_seasons(
+    db: Annotated[AsyncSession, Depends(get_db)]
+):
+    """
+    Get all seasons.
+    """
+    return await list_season(db)
 
+
+# ================== CREATE ==================
 
 @router.post(
     "",
@@ -36,41 +47,70 @@ def list_all_seasons(db: Annotated[Session, Depends(get_db)]):
     response_model=SeasonResponse,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def create_a_new_season(season: SeasonCreate, db: Annotated[Session, Depends(get_db)]):
-    return create_season(db, season)
+async def create_a_new_season(
+    season: SeasonCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Create a new season.
 
+    Requires:
+    - ADMIN or EDITOR role
+    """
+    return await create_season(db, season)
+
+
+# ================== PUT (REPLACE) ==================
 
 @router.put(
     "/{season_id}",
     response_model=SeasonResponse,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def update_existing_season(
-    season_id: Annotated[int, Path(ge=1)],
+async def update_existing_season(
+    season_id: Annotated[int, Path(ge=1, title="Season ID")],
     season: SeasonCreate,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return update_season(db, season_id, season)
+    """
+    Replace a season completely.
+    """
+    return await update_season(db, season_id, season)
 
+
+# ================== PATCH ==================
 
 @router.patch(
     "/{season_id}",
     response_model=SeasonResponse,
     dependencies=[Depends(allow_admin_or_editor)],
 )
-def patch_existing_season(
-    season_id: int,
+async def patch_existing_season(
+    season_id: Annotated[int, Path(ge=1, title="Season ID")],
     season: SeasonUpdate,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return patch_season(db, season_id, season)
+    """
+    Partially update a season.
+    """
+    return await patch_season(db, season_id, season)
 
+
+# ================== DELETE ==================
 
 @router.delete(
-    "/{season_id}", status_code=200, dependencies=[Depends(allow_admin_or_editor)]
+    "/{season_id}",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(allow_admin_or_editor)],
 )
-def delete_existing_season(
-    season_id: int,
-    db: Annotated[Session, Depends(get_db)],
+async def delete_existing_season(
+    season_id: Annotated[int, Path(ge=1, title="Season ID")],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return delete_season(db, season_id)
+    """
+    Delete a season.
+
+    Requires:
+    - ADMIN or EDITOR role
+    """
+    return await delete_season(db, season_id)

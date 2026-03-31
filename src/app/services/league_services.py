@@ -1,34 +1,77 @@
 from fastapi import HTTPException, status
-from sqlalchemy import exists, select
-from sqlalchemy.orm import Session
+from sqlalchemy import select, exists
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..schemas.league_schemas import LeagueCreate
-
 from ..db_models import League as LeagueModel, Season
 
-#------------------------------------GET ALL LEAGUES--------------------------------------------------------
 
-def get_all_leagues(db: Session):
+# ------------------------------------ GET ALL LEAGUES ------------------------------------
+
+async def get_all_leagues(db: AsyncSession):
+    """
+    Fetch all leagues that are not soft-deleted.
+
+    Args:
+        db (AsyncSession): Database session
+
+    Returns:
+        List[LeagueModel]: List of active leagues
+    """
     query = select(LeagueModel).where(LeagueModel.is_deleted.is_(False))
-    teams = db.execute(query).scalars().all()
-    return teams
+    result = await db.execute(query)
+    leagues = result.scalars().all()
+    return leagues
 
-#-------------------------------------CREATE A LEAGUE--------------------------------------------------------
 
-def create_league(db: Session, league: LeagueCreate):
+# ------------------------------------ CREATE A LEAGUE ------------------------------------
+
+async def create_league(db: AsyncSession, league: LeagueCreate):
+    """
+    Create a new league.
+
+    Args:
+        db (AsyncSession): Database session
+        league (LeagueCreate): Input schema
+
+    Returns:
+        LeagueModel: Created league object
+
+    Raises:
+        HTTPException: If league name already exists
+    """
     try:
-        league = LeagueModel(**league.model_dump())
-        db.add(league)
-        db.commit()
-        db.refresh(league)
-        return league
-    except:
-        raise HTTPException(status_code=409, detail="Name already exists")
+        db_league = LeagueModel(**league.model_dump())
+        db.add(db_league)
+        await db.commit()
+        await db.refresh(db_league)
+        return db_league
 
-#--------------------------------------UPDATE A LEAGUE------------------------------------------------------------
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Name already exists"
+        )
 
-def league_update(db, league_id, league):
-    db_league = db.get(LeagueModel, league_id)
+
+# ------------------------------------ UPDATE A LEAGUE ------------------------------------
+
+async def league_update(db: AsyncSession, league_id: int, league: LeagueCreate):
+    """
+    Update an existing league.
+
+    Args:
+        db (AsyncSession): Database session
+        league_id (int): League ID
+        league (LeagueCreate): Updated data
+
+    Returns:
+        LeagueModel: Updated league
+
+    Raises:
+        HTTPException: If league not found or name conflict
+    """
+    db_league = await db.get(LeagueModel, league_id)
 
     if db_league is None:
         raise HTTPException(
@@ -36,44 +79,63 @@ def league_update(db, league_id, league):
             detail="League not found"
         )
 
-    # Only the fields the client explicitly sent
     update_data = league.model_dump(exclude_unset=True)
 
     if "name" in update_data:
         db_league.name = update_data["name"]
 
     try:
-        db.commit()
-        db.refresh(db_league)
+        await db.commit()
+        await db.refresh(db_league)
         return db_league
 
-    except:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="name already exists"
+            detail="Name already exists"
         )
 
-#---------------------------------------DELETE A LEAGUE----------------------------------------------------------
 
-def delete_league(db: Session, league_id: int):
-    league = db.get(LeagueModel, league_id)
+# ------------------------------------ DELETE A LEAGUE ------------------------------------
+
+async def delete_league(db: AsyncSession, league_id: int):
+    """
+    Delete a league:
+    - Soft delete if it has related seasons
+    - Hard delete if no dependencies
+
+    Args:
+        db (AsyncSession): Database session
+        league_id (int): League ID
+
+    Returns:
+        dict: Deletion message
+
+    Raises:
+        HTTPException: If league not found
+    """
+    league = await db.get(LeagueModel, league_id)
 
     if not league:
-        raise HTTPException(status_code=404, detail="League not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="League not found"
+        )
 
-    #  Check if child exists
-    has_seasons = db.query(
-        exists().where(Season.league_id == league_id)
-    ).scalar()
+    # Check if related seasons exist
+    result = await db.execute(
+        select(exists().where(Season.league_id == league_id))
+    )
+    has_seasons = result.scalar()
 
     if has_seasons:
-        #  Soft delete
+        # Soft delete
         league.is_deleted = True
-        db.commit()
+        await db.commit()
         return {"message": "League soft deleted (has seasons)"}
 
     else:
-        #  Hard delete
-        db.delete(league)
-        db.commit()
+        # Hard delete
+        await db.delete(league)
+        await db.commit()
         return {"message": "League permanently deleted"}
