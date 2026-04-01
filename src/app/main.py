@@ -9,7 +9,7 @@ from .routes.standings import router as standings_router
 from .routes.teams import router as teams_router
 from .routes.users import router as users_router  
 from .security.auth import router as auth_router
-
+from fastapi.middleware.cors import CORSMiddleware
 
 # -------------------------
 # LIFESPAN FUNCTION
@@ -33,6 +33,7 @@ async def lifespan(app: FastAPI):
     # SHUTDOWN
     print(" App shutting down...")
 
+
    
 # -------------------------
 # FASTAPI APP
@@ -43,6 +44,16 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,  #  Added lifespan here
 )
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Security & Users
 app.include_router(auth_router)
 app.include_router(users_router)
