@@ -1,6 +1,9 @@
 from fastapi import HTTPException, status
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select, exists
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..cache import delete_cache, delete_cache_pattern, get_cache, make_cache_key, set_cache
 
 from ..schemas.league_schemas import LeagueCreate
 from ..db_models import League as LeagueModel, Season
@@ -18,9 +21,19 @@ async def get_all_leagues(db: AsyncSession):
     Returns:
         List[LeagueModel]: List of active leagues
     """
+    cache_key = make_cache_key("leagues")
+
+    cached = await get_cache(cache_key)
+    if cached:
+        return cached
+
     query = select(LeagueModel).where(LeagueModel.is_deleted.is_(False))
     result = await db.execute(query)
     leagues = result.scalars().all()
+
+    leagues_dict = jsonable_encoder(leagues)
+    await set_cache(cache_key, leagues_dict, ttl=300)
+
     return leagues
 
 
@@ -45,6 +58,10 @@ async def create_league(db: AsyncSession, league: LeagueCreate):
         db.add(db_league)
         await db.commit()
         await db.refresh(db_league)
+
+        await set_cache(make_cache_key("league", id=db_league.id), jsonable_encoder(db_league))
+        await delete_cache_pattern("leagues:*")  
+        
         return db_league
 
     except Exception:
@@ -87,6 +104,12 @@ async def league_update(db: AsyncSession, league_id: int, league: LeagueCreate):
     try:
         await db.commit()
         await db.refresh(db_league)
+        await delete_cache(make_cache_key("league", id=league_id))
+        await delete_cache_pattern("leagues:*")
+
+        league_dict = jsonable_encoder(db_league)
+        await set_cache(make_cache_key("league", id=league_id), league_dict)
+
         return db_league
 
     except Exception:
@@ -132,10 +155,18 @@ async def delete_league(db: AsyncSession, league_id: int):
         # Soft delete
         league.is_deleted = True
         await db.commit()
+
+        await delete_cache(make_cache_key("league", id=league_id))
+        await delete_cache_pattern("leagues:*")
+
         return {"message": "League soft deleted (has seasons)"}
 
     else:
         # Hard delete
         await db.delete(league)
         await db.commit()
+
+        await delete_cache(make_cache_key("league", id=league_id))
+        await delete_cache_pattern("leagues:*")
+
         return {"message": "League permanently deleted"}

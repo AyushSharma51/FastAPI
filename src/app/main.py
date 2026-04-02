@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from .database import create_tables
+
+from .cache import close_redis, init_redis
+from .database import close_db, create_tables
 from .routes.league import router as league_router
 from .routes.matches import router as matches_router
 from .routes.players import player_router, stats_router, team_player_router
@@ -17,21 +19,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Lifespan controls app startup & shutdown.
-
-    - Before yield → runs ONCE at startup
-    - After yield → runs ONCE at shutdown
-
-    """
-
     # STARTUP
+    await init_redis()   # ← Redis connects before app accepts requests
     await create_tables()
 
-    yield  # App starts handling requests here
+    yield
 
     # SHUTDOWN
-    print(" App shutting down...")
+    await close_redis()  # ← Clean disconnect
+    await close_db()
+    print("App shutting down...")
 
 
    

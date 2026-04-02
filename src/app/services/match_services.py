@@ -1,5 +1,6 @@
 from typing import List
 from fastapi import HTTPException, status
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select, delete, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -9,7 +10,7 @@ from ..db_models import PlayerMatchStat as PlayerMatchStatModel
 from ..db_models import Season as SeasonModel
 from ..db_models import Team as TeamModel
 from ..schemas.match_schemas import MatchCreate
-
+from ..cache import delete_cache_pattern, get_cache, make_cache_key, set_cache, delete_cache
 
 # ------------------------------------ CREATE MATCH ------------------------------------
 
@@ -19,6 +20,7 @@ async def create_a_new_match(db: AsyncSession, matches: List[MatchCreate]):
     for match in matches:
 
         season = await db.get(SeasonModel, match.season_id)
+
         if not season:
             raise HTTPException(404, "Season not found")
 
@@ -59,8 +61,13 @@ async def create_a_new_match(db: AsyncSession, matches: List[MatchCreate]):
             )
             .where(MatchModel.id == db_match.id)
         )
+        db_match = result.unique().scalar_one()  
 
-        db_match = result.unique().scalar_one()  # ✅ FIX
+
+        # Write-through: cache full match dict, invalidate all list caches
+        await set_cache(make_cache_key("match", id=db_match.id), jsonable_encoder(db_match))
+        await delete_cache_pattern("matches:*")  # new match affects all paginated lists
+
         results.append(db_match)
 
     return results
@@ -69,6 +76,25 @@ async def create_a_new_match(db: AsyncSession, matches: List[MatchCreate]):
 # ------------------------------------ GET ALL MATCHES ------------------------------------
 
 async def get_all_matches(db, filters, date_range, sort_params, pagination):
+
+    #  CREATE UNIQUE CACHE KEY
+    cache_key = make_cache_key(
+        "matches",
+        status=filters.status.value if filters.status else None,
+        from_date=str(date_range.from_date),
+        to_date=str(date_range.to_date),
+        sort_by=sort_params.sort_by,
+        sort_order=sort_params.sort_order,
+        offset=pagination.offset,
+        limit=pagination.limit
+    )
+
+    # CHECK CACHE
+    cached = await get_cache(cache_key)
+    if cached:
+        print("CACHE HIT")
+        return cached
+    
     query = select(MatchModel).options(
         joinedload(MatchModel.season).joinedload(SeasonModel.league),
         selectinload(MatchModel.participants).joinedload(MatchParticipantModel.team)
@@ -100,17 +126,32 @@ async def get_all_matches(db, filters, date_range, sort_params, pagination):
     result = await db.execute(query)
     matches = result.scalars().unique().all()
 
-    return {
+    response = {
         "total": total,
         "page": pagination.offset // pagination.limit if pagination.limit else 0,
         "limit": pagination.limit,
-        "matches": matches,
+        "matches": matches 
     }
+
+    json_data = jsonable_encoder(response)
+    
+    #  STORE IN CACHE
+    await set_cache(cache_key, json_data, ttl=180)
+
+    return response
 
 
 # ------------------------------------ GET MATCH BY ID ------------------------------------
 
 async def get_match_by_id(db, match_id):
+    # Single match
+    cache_key = make_cache_key("match", id=match_id)
+
+    #  Check cache
+    cached = await get_cache(cache_key)
+    if cached:
+        return cached
+    
     result = await db.execute(
         select(MatchModel)
         .options(
@@ -120,13 +161,17 @@ async def get_match_by_id(db, match_id):
         .where(MatchModel.id == match_id)
     )
 
-    match = result.unique().scalar_one_or_none()  # ✅ FIX
+    match = result.unique().scalar_one_or_none()  
 
     if match is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Match not found"
         )
+    
+    json_data = jsonable_encoder(match)
+
+    await set_cache(cache_key, json_data)
 
     return match
 
@@ -164,7 +209,16 @@ async def update_a_match(db, match_id, update):
         .where(MatchModel.id == db_match.id)
     )
 
-    db_match = result.unique().scalar_one()  # ✅ FIX
+    db_match = result.unique().scalar_one()  
+
+
+    # Invalidate both the single match and all list caches
+    await delete_cache(make_cache_key("match", id=match_id))
+    await delete_cache_pattern("matches:*")
+
+    match_dict = jsonable_encoder(db_match)
+    await set_cache(make_cache_key("match", id=match_id), match_dict)
+
     return db_match
 
 
@@ -194,7 +248,14 @@ async def replace_a_match(db, match_id, match):
         .where(MatchModel.id == db_match.id)
     )
 
-    db_match = result.unique().scalar_one()  # ✅ FIX
+    db_match = result.unique().scalar_one()  
+    
+    await delete_cache(make_cache_key("match", id=match_id))
+    await delete_cache_pattern("matches:*")
+
+    match_dict = jsonable_encoder(db_match)
+    await set_cache(make_cache_key("match", id=match_id), match_dict)
+
     return db_match
 
 
@@ -226,5 +287,7 @@ async def delete_a_match(db, match_id):
     await db.delete(match)
     await db.commit()
 
+    await delete_cache(make_cache_key("match", id=match_id))
+    await delete_cache_pattern("matches:*")
     
     return {"message": "Match deleted successfully"}

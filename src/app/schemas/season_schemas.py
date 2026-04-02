@@ -18,7 +18,9 @@ class Season(BaseModel):
         if self.start_date == self.end_date:
             raise ValueError("Season cannot start and end on the same date")
         return self
-
+    model_config = {
+        "from_attributes": True
+    }
 
 class SeasonCreate(Season):
     pass
